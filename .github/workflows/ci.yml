@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: ['feature/**', 'fix/**']
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  backend-check:
+    name: Backend lint & syntax
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax check
+        run: node --check src/server.js src/config/db.js src/middleware/auth.js
+
+  frontend-build:
+    name: Frontend build check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    # Ne tourne que si le dossier frontend existe
+    if: ${{ hashFiles('frontend/package.json') != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: http://localhost:3000

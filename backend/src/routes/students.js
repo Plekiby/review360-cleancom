@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { query, getClient } from '../config/db.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -108,9 +108,17 @@ router.post('/import/:classId', requireAuth, upload.single('file'), async (req, 
   try {
     if (!req.file) return res.status(400).json({ error: 'Fichier manquant' });
 
-    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const sheet = workbook.worksheets[0];
+    const headerRow = sheet.getRow(1).values.slice(1); // ExcelJS est 1-indexed
+    const rows = [];
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const obj = {};
+      row.values.slice(1).forEach((val, i) => { obj[headerRow[i]] = val ?? ''; });
+      rows.push(obj);
+    });
 
     const { school_id, id: imported_by } = req.user;
     const { classId } = req.params;
