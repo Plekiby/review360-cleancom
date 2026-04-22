@@ -92,6 +92,11 @@ export const api = {
 
   // Alerts
   createAlert: (data) => request('/alerts', { method: 'POST', body: JSON.stringify(data) }),
+  getAlerts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/alerts${qs ? `?${qs}` : ''}`);
+  },
+  resolveAlert: (id) => request(`/alerts/${id}`, { method: 'PATCH' }),
 
   // Exports (return blob URL for download)
   exportPDF: async () => {

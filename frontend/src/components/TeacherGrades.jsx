@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import StudentDetail from './StudentDetail';
 
 const ADOC_LABELS = ['ADOC 1', 'ADOC 2', 'ADOC 3', 'ADOC 4', 'ADOC 5'];
 const DRCV_LABELS = ['DRCV 1', 'DRCV 2', 'DRCV 3', 'DRCV 4'];
@@ -10,6 +11,7 @@ export default function TeacherGrades() {
   const [filterStudent, setFilterStudent] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterPeriod, setFilterPeriod] = useState('all');
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   useEffect(() => {
     const params = {};
@@ -150,7 +152,22 @@ export default function TeacherGrades() {
                       ? <div className="comment-box">{v.comments}</div>
                       : <span style={{ color: '#aaa', fontSize: '0.8rem' }}>—</span>}
                   </td>
-                  <td><button className="btn btn-outline">Modifier</button></td>
+                  <td>
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                      onClick={() => setSelectedStudent({
+                        id: v.student_id,
+                        last_name: v.last_name,
+                        first_name: v.first_name,
+                        student_number: v.student_number,
+                        adoc_validated: 0,
+                        drcv_validated: 0,
+                      })}
+                    >
+                      Voir détail
+                    </button>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
@@ -191,6 +208,13 @@ export default function TeacherGrades() {
           </div>
         </div>
       </div>
+
+      {selectedStudent && (
+        <StudentDetail
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
     </>
   );
 }

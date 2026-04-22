@@ -27,6 +27,7 @@ export default function TeacherStudents({ user }) {
   const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -43,6 +44,9 @@ export default function TeacherStudents({ user }) {
     api.getClassStudents(selectedClass).then(setStudents);
   }, [selectedClass]);
 
+  const filtered = search
+    ? students.filter((s) => `${s.last_name} ${s.first_name}`.toLowerCase().includes(search.toLowerCase()) || s.student_number?.includes(search))
+    : students;
   const urgent = students.filter((s) => s.critical_alerts > 0);
   const avgGrade = students.length
     ? (students.reduce((sum, s) => sum + (parseFloat(s.average_grade) || 0), 0) / students.length).toFixed(1)
@@ -76,16 +80,24 @@ export default function TeacherStudents({ user }) {
         </div>
       </div>
 
-      {/* Sélecteur de classe */}
-      {classes.length > 1 && (
-        <div className="filters-bar" style={{ marginBottom: 16 }}>
+      {/* Filtres */}
+      <div className="filters-bar" style={{ marginBottom: 16 }}>
+        {classes.length > 1 && (
           <select value={selectedClass || ''} onChange={(e) => setSelectedClass(e.target.value)}>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-        </div>
-      )}
+        )}
+        <input
+          type="text"
+          placeholder="Rechercher un étudiant (nom, numéro)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: 200 }}
+        />
+        {search && (
+          <button className="btn btn-outline" style={{ padding: '6px 12px' }} onClick={() => setSearch('')}>✕</button>
+        )}
+      </div>
 
       {/* Bannière alerte */}
       {urgent.length > 0 && (
@@ -117,12 +129,20 @@ export default function TeacherStudents({ user }) {
               </tr>
             </thead>
             <tbody>
-              {students.map((s) => {
+              {filtered.map((s) => {
                 const status = computeStatus(s);
                 const grade = parseFloat(s.average_grade);
                 return (
-                  <tr key={s.id} className={status === 'critical' ? 'urgent' : ''}>
-                    <td><strong>{s.last_name} {s.first_name}</strong></td>
+                  <tr
+                    key={s.id}
+                    className={status === 'critical' ? 'urgent' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelectedStudent(s)}
+                  >
+                    <td>
+                      <strong>{s.last_name} {s.first_name}</strong>
+                      {s.critical_alerts > 0 && <span style={{ marginLeft: 6, fontSize: '0.75rem', color: '#e74c3c' }}>⚠️ {s.critical_alerts} alerte{s.critical_alerts > 1 ? 's' : ''}</span>}
+                    </td>
                     <td>{s.student_number}</td>
                     <td className={gradeClass(grade)}>
                       {isNaN(grade) ? '—' : `${grade.toFixed(1)}/10`}
@@ -132,17 +152,19 @@ export default function TeacherStudents({ user }) {
                     <td style={{ fontSize: '0.82rem', color: '#7f8c8d' }}>
                       {s.last_session_date
                         ? new Date(s.last_session_date).toLocaleDateString('fr-FR')
-                        : '—'}
+                        : <span style={{ color: '#e74c3c' }}>Jamais</span>}
                     </td>
                     <td>{statusBadge(status)}</td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <button className="btn btn-primary" onClick={() => setSelectedStudent(s)}>Voir détail</button>
                     </td>
                   </tr>
                 );
               })}
-              {students.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#7f8c8d', padding: 24 }}>Aucun étudiant</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#7f8c8d', padding: 24 }}>
+                  {search ? `Aucun résultat pour "${search}"` : 'Aucun étudiant'}
+                </td></tr>
               )}
             </tbody>
           </table>

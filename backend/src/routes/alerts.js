@@ -57,4 +57,19 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
+// PATCH /api/alerts/:id — résoudre une alerte
+router.patch('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE alerts SET is_resolved = true, resolved_at = NOW(), updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Alerte introuvable' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

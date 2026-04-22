@@ -127,7 +127,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 
     const result = await query(
       `SELECT v.*, ash.sheet_type, ash.sheet_number, ash.title AS sheet_title, ash.status AS sheet_status,
-              s.first_name, s.last_name, s.student_number,
+              s.id AS student_id, s.first_name, s.last_name, s.student_number,
               EXTRACT(DAY FROM NOW() - v.created_at) AS days_since_validation
        FROM validations v
        JOIN activity_sheets ash ON v.activity_sheet_id = ash.id
