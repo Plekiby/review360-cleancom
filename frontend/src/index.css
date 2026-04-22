@@ -1,0 +1,3 @@
+/* Reset minimal — le design system gère le reste */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
