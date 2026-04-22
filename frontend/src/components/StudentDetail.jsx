@@ -24,11 +24,18 @@ const ALERT_COLORS = {
   ROUGE:  { bg: '#fff5f5', border: '#e74c3c', badge: 'badge-danger' },
 };
 
-function SessionCard({ session, sheets, onStatusChange, onValidate }) {
+function SessionCard({ session, sheets, onStatusChange, onValidate, hideSheetLabel = false }) {
   const [savingNotes, setSavingNotes] = useState(false);
   const [notes, setNotes] = useState(session.notes || '');
   const [editingNotes, setEditingNotes] = useState(false);
   const st = SESSION_STATUS[session.status] || SESSION_STATUS.scheduled;
+
+  // Sync local notes state when session data changes after reload (prevents cross-session bleed)
+  useEffect(() => {
+    if (!editingNotes) {
+      setNotes(session.notes || '');
+    }
+  }, [session.id, session.notes]);
 
   const sheet = sheets.find((s) => s.id === session.activity_sheet_id);
   const canValidate = session.status === 'completed' && sheet?.status === 'in_progress';
@@ -64,11 +71,13 @@ function SessionCard({ session, sheets, onStatusChange, onValidate }) {
             {session.session_time && ` · ${session.session_time.slice(0, 5)}`}
           </div>
           <div style={{ fontSize: '0.8rem', color: '#7f8c8d', marginTop: 2 }}>
-            <span style={{ fontWeight: 600, color: session.sheet_type === 'ADOC' ? '#3498db' : '#f39c12' }}>
-              {session.sheet_type} {session.sheet_number}
-            </span>
-            {session.location && <span> · 📍 {session.location}</span>}
-            {session.teacher_name && <span> · {session.teacher_name}</span>}
+            {!hideSheetLabel && (
+              <span style={{ fontWeight: 600, color: session.sheet_type === 'ADOC' ? '#3498db' : '#f39c12', marginRight: 4 }}>
+                {session.sheet_type} {session.sheet_number} ·{' '}
+              </span>
+            )}
+            {session.location && <span>📍 {session.location} · </span>}
+            {session.teacher_name && <span>{session.teacher_name}</span>}
           </div>
           {session.objective && (
             <div style={{ fontSize: '0.83rem', color: '#555', marginTop: 4, fontStyle: 'italic' }}>
@@ -146,6 +155,8 @@ export default function StudentDetail({ student, onClose }) {
   const [showValidationForm, setShowValidationForm] = useState(null);
   const [showSheetForm, setShowSheetForm] = useState(null);
   const [resolvingAlert, setResolvingAlert] = useState(null);
+  const [expandedSheetId, setExpandedSheetId] = useState(null);
+  const [sessionFilter, setSessionFilter] = useState('all');
 
   const reload = () => {
     Promise.all([
@@ -167,6 +178,8 @@ export default function StudentDetail({ student, onClose }) {
   const adocSheets = sheets.filter((s) => s.sheet_type === 'ADOC').sort((a, b) => a.sheet_number - b.sheet_number);
   const drcvSheets = sheets.filter((s) => s.sheet_type === 'DRCV').sort((a, b) => a.sheet_number - b.sheet_number);
   const activeSheets = sheets.filter((s) => s.status !== 'validated');
+
+  const sessionsForSheet = (sheetId) => sessions.filter((s) => s.activity_sheet_id === sheetId);
 
   const avgGrade = validations.filter((v) => v.session_grade).length
     ? (validations.reduce((s, v) => s + (parseFloat(v.session_grade) || 0), 0) / validations.filter((v) => v.session_grade).length).toFixed(1)
@@ -192,6 +205,18 @@ export default function StudentDetail({ student, onClose }) {
       setResolvingAlert(null);
     }
   };
+
+  // Sessions tab: sheets that have at least one session and match the current filter
+  const sheetsWithSessions = sheets
+    .filter((sh) => (sessionFilter === 'all' || sh.sheet_type === sessionFilter) && sessionsForSheet(sh.id).length > 0)
+    .sort((a, b) => {
+      if (a.sheet_type !== b.sheet_type) return a.sheet_type === 'ADOC' ? -1 : 1;
+      return a.sheet_number - b.sheet_number;
+    });
+
+  const noSessionsForFilter = sheets
+    .filter((sh) => sessionFilter === 'all' || sh.sheet_type === sessionFilter)
+    .every((sh) => sessionsForSheet(sh.id).length === 0);
 
   const TABS = [
     { id: 'sheets',      label: `📋 Fiches (${sheets.length})` },
@@ -230,7 +255,7 @@ export default function StudentDetail({ student, onClose }) {
                   background: tab === t.id ? 'white' : 'transparent',
                   borderBottom: tab === t.id ? '2px solid #667eea' : '2px solid transparent',
                   fontWeight: tab === t.id ? 600 : 400,
-                  color: t.id === 'alerts' && alerts.length > 0 ? (tab === t.id ? '#e74c3c' : '#e74c3c') : (tab === t.id ? '#667eea' : '#7f8c8d'),
+                  color: t.id === 'alerts' && alerts.length > 0 ? '#e74c3c' : (tab === t.id ? '#667eea' : '#7f8c8d'),
                   marginBottom: -2,
                 }}
               >
@@ -252,49 +277,90 @@ export default function StudentDetail({ student, onClose }) {
                     {list.map((sheet) => {
                       const st = STATUS_LABEL[sheet.status] || STATUS_LABEL.not_started;
                       const grade = parseFloat(sheet.avg_grade);
+                      const isExpanded = expandedSheetId === sheet.id;
+                      const sheetSessions = sessionsForSheet(sheet.id);
                       return (
-                        <div key={sheet.id} style={sheetRow}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 600, minWidth: 70, color }}>{type} {sheet.sheet_number}</span>
-                            <span className={`badge ${st.cls}`}>{st.label}</span>
-                            {sheet.title
-                              ? <span style={{ fontSize: '0.82rem', color: '#555' }}>{sheet.title}</span>
-                              : <span style={{ fontSize: '0.78rem', color: '#bbb', fontStyle: 'italic' }}>Titre non renseigné</span>}
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            {!isNaN(grade) && (
-                              <span style={{ fontWeight: 600, color: grade >= 8 ? '#27ae60' : grade >= 6 ? '#f39c12' : '#e74c3c' }}>
-                                {grade.toFixed(1)}/10
-                              </span>
-                            )}
-                            <span style={{ fontSize: '0.78rem', color: '#aaa' }}>{sheet.sessions_count || 0} session(s)</span>
-                            <button
-                              className="btn btn-outline"
-                              style={{ fontSize: '0.75rem', padding: '3px 8px' }}
-                              onClick={() => setShowSheetForm(sheet)}
-                              title="Voir / éditer le contenu"
-                            >
-                              ✏️
-                            </button>
-                            {sheet.status !== 'validated' && (
+                        <div key={sheet.id} style={{ marginBottom: 8 }}>
+                          {/* Sheet row */}
+                          <div style={{
+                            ...sheetRow,
+                            borderRadius: isExpanded ? '8px 8px 0 0' : 8,
+                            borderBottom: isExpanded ? 'none' : '1px solid #e0e0e0',
+                            background: isExpanded ? '#eef1ff' : '#f8f9fa',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, minWidth: 70, color }}>{type} {sheet.sheet_number}</span>
+                              <span className={`badge ${st.cls}`}>{st.label}</span>
+                              {sheet.title
+                                ? <span style={{ fontSize: '0.82rem', color: '#555' }}>{sheet.title}</span>
+                                : <span style={{ fontSize: '0.78rem', color: '#bbb', fontStyle: 'italic' }}>Titre non renseigné</span>}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              {!isNaN(grade) && (
+                                <span style={{ fontWeight: 600, color: grade >= 8 ? '#27ae60' : grade >= 6 ? '#f39c12' : '#e74c3c' }}>
+                                  {grade.toFixed(1)}/10
+                                </span>
+                              )}
+                              <span style={{ fontSize: '0.78rem', color: '#aaa' }}>{sheetSessions.length} session(s)</span>
                               <button
-                                className={`btn ${sheet.status === 'not_started' ? 'btn-primary' : 'btn-outline'}`}
-                                style={{ fontSize: '0.78rem', padding: '4px 10px' }}
-                                onClick={() => setShowSessionForm(sheet.id)}
+                                className="btn btn-outline"
+                                style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                                onClick={() => setShowSheetForm(sheet)}
+                                title="Voir / éditer le contenu"
                               >
-                                {sheet.status === 'not_started' ? '▶ Démarrer' : '+ Session'}
+                                ✏️
                               </button>
-                            )}
-                            {sheet.status === 'in_progress' && (
+                              {sheet.status !== 'validated' && (
+                                <button
+                                  className={`btn ${sheet.status === 'not_started' ? 'btn-primary' : 'btn-outline'}`}
+                                  style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+                                  onClick={() => setShowSessionForm(sheet.id)}
+                                >
+                                  {sheet.status === 'not_started' ? '▶ Démarrer' : '+ Session'}
+                                </button>
+                              )}
+                              {sheet.status === 'in_progress' && (
+                                <button
+                                  className="btn btn-success"
+                                  style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+                                  onClick={() => openValidation(sheet)}
+                                >
+                                  Valider
+                                </button>
+                              )}
+                              {/* Expand/collapse toggle */}
                               <button
-                                className="btn btn-success"
-                                style={{ fontSize: '0.78rem', padding: '4px 10px' }}
-                                onClick={() => openValidation(sheet)}
+                                onClick={() => setExpandedSheetId(isExpanded ? null : sheet.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.82rem', color: '#667eea', padding: '2px 6px', fontWeight: 700 }}
+                                title={isExpanded ? 'Replier les sessions' : 'Voir les sessions'}
                               >
-                                Valider
+                                {isExpanded ? '▲' : '▼'}
                               </button>
-                            )}
+                            </div>
                           </div>
+
+                          {/* Inline sessions for this sheet */}
+                          {isExpanded && (
+                            <div style={{ background: '#f0f4ff', borderRadius: '0 0 8px 8px', padding: '14px 16px', border: '1px solid #d0d8f0', borderTop: 'none' }}>
+                              {sheetSessions.length === 0 ? (
+                                <p style={{ color: '#7f8c8d', fontSize: '0.84rem', margin: 0 }}>
+                                  Aucune session pour cette fiche.
+                                  {sheet.status === 'not_started' && ' Cliquez "▶ Démarrer" pour commencer.'}
+                                </p>
+                              ) : (
+                                sheetSessions.map((sess) => (
+                                  <SessionCard
+                                    key={sess.id}
+                                    session={sess}
+                                    sheets={sheets}
+                                    onStatusChange={reload}
+                                    onValidate={openValidation}
+                                    hideSheetLabel
+                                  />
+                                ))
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -306,20 +372,68 @@ export default function StudentDetail({ student, onClose }) {
             {/* ===== ONGLET SESSIONS ===== */}
             {!loading && tab === 'sessions' && (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                  <span style={{ fontWeight: 600 }}>{sessions.length} session(s) enregistrée(s)</span>
-                  <button className="btn btn-primary" onClick={() => setShowSessionForm('__select__')} disabled={!activeSheets.length}>
-                    + Nouvelle session
-                  </button>
+                {/* Filter + action bar */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {['all', 'ADOC', 'DRCV'].map((f) => (
+                    <button
+                      key={f}
+                      className={`btn ${sessionFilter === f ? 'btn-primary' : 'btn-outline'}`}
+                      style={{ fontSize: '0.8rem', padding: '5px 14px' }}
+                      onClick={() => setSessionFilter(f)}
+                    >
+                      {f === 'all' ? 'Toutes les fiches' : f}
+                    </button>
+                  ))}
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>{sessions.length} session(s)</span>
+                    <button className="btn btn-primary" style={{ fontSize: '0.85rem' }} onClick={() => setShowSessionForm('__select__')} disabled={!activeSheets.length}>
+                      + Nouvelle session
+                    </button>
+                  </div>
                 </div>
-                {sessions.length === 0 && (
+
+                {/* Sessions grouped by sheet */}
+                {noSessionsForFilter ? (
                   <p style={{ color: '#7f8c8d', textAlign: 'center', padding: 24 }}>
                     Aucune session. Utilisez "▶ Démarrer" dans l'onglet Fiches.
                   </p>
+                ) : (
+                  sheetsWithSessions.map((sheet) => {
+                    const sheetSessions = sessionsForSheet(sheet.id);
+                    const color = sheet.sheet_type === 'ADOC' ? '#3498db' : '#f39c12';
+                    const st = STATUS_LABEL[sheet.status] || STATUS_LABEL.not_started;
+                    return (
+                      <div key={sheet.id} style={{ marginBottom: 24 }}>
+                        {/* Sheet group header */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '8px 14px', background: `${color}18`, borderRadius: 8, borderLeft: `4px solid ${color}` }}>
+                          <span style={{ fontWeight: 700, fontSize: '0.95rem', color }}>{sheet.sheet_type} {sheet.sheet_number}</span>
+                          <span className={`badge ${st.cls}`}>{st.label}</span>
+                          {sheet.title && <span style={{ fontSize: '0.82rem', color: '#555' }}>{sheet.title}</span>}
+                          <span style={{ marginLeft: 'auto', fontSize: '0.78rem', color: '#aaa' }}>{sheetSessions.length} session(s)</span>
+                          {sheet.status !== 'validated' && (
+                            <button
+                              className="btn btn-outline"
+                              style={{ fontSize: '0.75rem', padding: '3px 10px' }}
+                              onClick={() => setShowSessionForm(sheet.id)}
+                            >
+                              + Session
+                            </button>
+                          )}
+                        </div>
+                        {sheetSessions.map((sess) => (
+                          <SessionCard
+                            key={sess.id}
+                            session={sess}
+                            sheets={sheets}
+                            onStatusChange={reload}
+                            onValidate={openValidation}
+                            hideSheetLabel
+                          />
+                        ))}
+                      </div>
+                    );
+                  })
                 )}
-                {sessions.map((s) => (
-                  <SessionCard key={s.id} session={s} sheets={sheets} onStatusChange={reload} onValidate={openValidation} />
-                ))}
               </>
             )}
 
@@ -449,7 +563,7 @@ const overlay = {
 };
 const modal = {
   background: 'white', borderRadius: 10,
-  width: '100%', maxWidth: 680,
+  width: '100%', maxWidth: 720,
   maxHeight: '90vh',
   boxShadow: '0 24px 80px rgba(0,0,0,0.35)',
   display: 'flex', flexDirection: 'column',
@@ -464,8 +578,7 @@ const header = {
 const closeBtn = { background: 'none', border: 'none', color: 'white', fontSize: '1.3rem', cursor: 'pointer' };
 const sheetRow = {
   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  padding: '10px 14px', marginBottom: 8,
-  background: '#f8f9fa', borderRadius: 8,
+  padding: '10px 14px',
   border: '1px solid #e0e0e0', flexWrap: 'wrap', gap: 8,
 };
 const sessionCard = {
