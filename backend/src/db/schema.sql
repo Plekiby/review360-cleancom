@@ -109,7 +109,9 @@ CREATE TABLE follow_up_sessions (
   
   status VARCHAR(50) NOT NULL DEFAULT 'scheduled'
     CHECK (status IN ('scheduled', 'completed', 'cancelled', 'rescheduled')),
-  
+
+  notes TEXT, -- Observations post-session
+
   -- Intégration Google Calendar (optionnel)
   google_calendar_event_id VARCHAR(255),
   

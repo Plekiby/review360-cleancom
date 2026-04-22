@@ -15,6 +15,14 @@ router.post('/', requireAuth, async (req, res, next) => {
        RETURNING *`,
       [student_id, activity_sheet_id, req.user.id, session_date, session_time || null, location || null, objective || null]
     );
+
+    // Dès qu'une session est créée, la fiche passe en "in_progress" si elle était "not_started"
+    await query(
+      `UPDATE activity_sheets SET status = 'in_progress', updated_at = NOW()
+       WHERE id = $1 AND status = 'not_started'`,
+      [activity_sheet_id]
+    );
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     next(err);
@@ -55,19 +63,20 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-// PATCH /api/sessions/:id — marquer complétée / annulée / reportée
+// PATCH /api/sessions/:id — marquer complétée / annulée / reportée + notes post-session
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
-    const { status, location, objective } = req.body;
+    const { status, location, objective, notes } = req.body;
     const result = await query(
       `UPDATE follow_up_sessions
        SET status = COALESCE($1, status),
            location = COALESCE($2, location),
            objective = COALESCE($3, objective),
+           notes = COALESCE($4, notes),
            updated_at = NOW()
-       WHERE id = $4
+       WHERE id = $5
        RETURNING *`,
-      [status, location, objective, req.params.id]
+      [status || null, location || null, objective || null, notes !== undefined ? notes : null, req.params.id]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'Session introuvable' });
     res.json(result.rows[0]);

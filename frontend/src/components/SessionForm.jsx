@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 
-export default function SessionForm({ student, activitySheetId, onClose, onSaved }) {
+export default function SessionForm({ student, activitySheetId, sheets, onClose, onSaved }) {
   const today = new Date().toISOString().split('T')[0];
+
+  // Si sheets fourni (sélecteur), initialiser sur la première fiche non validée
+  const defaultSheetId = activitySheetId || (sheets && sheets.length > 0 ? sheets[0].id : null);
+
+  const [selectedSheetId, setSelectedSheetId] = useState(defaultSheetId);
   const [date, setDate] = useState(today);
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
@@ -12,12 +17,13 @@ export default function SessionForm({ student, activitySheetId, onClose, onSaved
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selectedSheetId) { setError('Veuillez sélectionner une fiche.'); return; }
     setError('');
     setLoading(true);
     try {
       await api.createSession({
         student_id: student.id,
-        activity_sheet_id: activitySheetId,
+        activity_sheet_id: selectedSheetId,
         session_date: date,
         session_time: time || null,
         location: location || null,
@@ -32,6 +38,8 @@ export default function SessionForm({ student, activitySheetId, onClose, onSaved
     }
   };
 
+  const selectedSheet = sheets?.find((s) => s.id === selectedSheetId);
+
   return (
     <div style={overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div style={modal}>
@@ -40,12 +48,33 @@ export default function SessionForm({ student, activitySheetId, onClose, onSaved
             <div style={{ fontWeight: 700 }}>📅 Nouvelle session de suivi</div>
             <div style={{ fontSize: '0.82rem', opacity: 0.8 }}>
               {student.last_name} {student.first_name}
+              {selectedSheet && ` · ${selectedSheet.sheet_type} ${selectedSheet.sheet_number}`}
             </div>
           </div>
           <button onClick={onClose} style={closeBtn}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ padding: 24 }}>
+          {/* Sélecteur de fiche (quand appelé depuis l'onglet Sessions) */}
+          {sheets && sheets.length > 0 && (
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label>Fiche concernée *</label>
+              <select
+                value={selectedSheetId || ''}
+                onChange={(e) => setSelectedSheetId(e.target.value)}
+                required
+                style={{ width: '100%', padding: '9px 12px', borderRadius: 4, border: '1px solid #e0e0e0', fontSize: '0.9rem' }}
+              >
+                <option value="">Choisir une fiche...</option>
+                {sheets.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.sheet_type} {s.sheet_number}{s.title ? ` — ${s.title}` : ''} ({s.status === 'not_started' ? 'Non démarrée' : 'En cours'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label>Date *</label>

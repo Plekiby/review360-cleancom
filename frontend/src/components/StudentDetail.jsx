@@ -17,14 +17,127 @@ const SESSION_STATUS = {
   rescheduled: { label: 'Reportée',   cls: 'badge-warning' },
 };
 
+function SessionCard({ session, sheets, onStatusChange, onValidate }) {
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notes, setNotes] = useState(session.notes || '');
+  const [editingNotes, setEditingNotes] = useState(false);
+  const st = SESSION_STATUS[session.status] || SESSION_STATUS.scheduled;
+
+  const sheet = sheets.find((s) => s.id === session.activity_sheet_id);
+  const canValidate = session.status === 'completed' && sheet?.status === 'in_progress';
+
+  const handleStatus = async (newStatus) => {
+    try {
+      await api.updateSession(session.id, { status: newStatus });
+      onStatusChange();
+    } catch (err) {
+      alert(`Erreur : ${err.message}`);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    setSavingNotes(true);
+    try {
+      await api.updateSession(session.id, { notes });
+      setEditingNotes(false);
+      onStatusChange();
+    } catch (err) {
+      alert(`Erreur : ${err.message}`);
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
+  return (
+    <div style={sessionCard}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600 }}>
+            {new Date(session.session_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {session.session_time && ` · ${session.session_time.slice(0, 5)}`}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#7f8c8d', marginTop: 2 }}>
+            <span style={{ fontWeight: 600, color: session.sheet_type === 'ADOC' ? '#3498db' : '#f39c12' }}>
+              {session.sheet_type} {session.sheet_number}
+            </span>
+            {session.location && <span> · 📍 {session.location}</span>}
+            {session.teacher_name && <span> · {session.teacher_name}</span>}
+          </div>
+          {session.objective && (
+            <div style={{ fontSize: '0.83rem', color: '#555', marginTop: 4, fontStyle: 'italic' }}>
+              Objectif : {session.objective}
+            </div>
+          )}
+        </div>
+        <span className={`badge ${st.cls}`} style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>{st.label}</span>
+      </div>
+
+      {/* Notes post-session (seulement pour sessions réalisées) */}
+      {session.status === 'completed' && (
+        <div style={{ marginTop: 8 }}>
+          {editingNotes ? (
+            <div>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Observations, compte-rendu de la session..."
+                rows={3}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 6, border: '1px solid #667eea', resize: 'vertical', fontFamily: 'inherit', fontSize: '0.84rem', boxSizing: 'border-box' }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                <button className="btn btn-primary" style={{ fontSize: '0.78rem', padding: '4px 12px' }} onClick={handleSaveNotes} disabled={savingNotes}>
+                  {savingNotes ? 'Sauvegarde...' : '💾 Sauvegarder'}
+                </button>
+                <button className="btn btn-outline" style={{ fontSize: '0.78rem', padding: '4px 10px' }} onClick={() => { setEditingNotes(false); setNotes(session.notes || ''); }}>
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {session.notes && <div className="comment-box" style={{ marginBottom: 6 }}>{session.notes}</div>}
+              <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '3px 10px' }} onClick={() => setEditingNotes(true)}>
+                📝 {session.notes ? 'Modifier note' : 'Ajouter note post-session'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Boutons d'action selon statut */}
+      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+        {session.status === 'scheduled' && (
+          <>
+            <button className="btn btn-success" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => handleStatus('completed')}>✅ Réalisée</button>
+            <button className="btn btn-warning" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => handleStatus('rescheduled')}>📅 Reporter</button>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => handleStatus('cancelled')}>❌ Annuler</button>
+          </>
+        )}
+        {session.status === 'rescheduled' && (
+          <>
+            <button className="btn btn-success" style={{ fontSize: '0.75rem', padding: '4px 10px' }} onClick={() => handleStatus('completed')}>✅ Réalisée</button>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => handleStatus('cancelled')}>❌ Annuler</button>
+          </>
+        )}
+        {canValidate && (
+          <button className="btn btn-success" style={{ fontSize: '0.75rem', padding: '4px 12px', fontWeight: 600 }} onClick={() => onValidate(sheet)}>
+            ✅ Valider la fiche {session.sheet_type} {session.sheet_number}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentDetail({ student, onClose }) {
   const [tab, setTab] = useState('sheets');
   const [sheets, setSheets] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [validations, setValidations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showSessionForm, setShowSessionForm] = useState(null); // activitySheetId
-  const [showValidationForm, setShowValidationForm] = useState(null); // validation object
+  const [showSessionForm, setShowSessionForm] = useState(null);
+  const [showValidationForm, setShowValidationForm] = useState(null);
 
   const reload = () => {
     Promise.all([
@@ -43,10 +156,20 @@ export default function StudentDetail({ student, onClose }) {
 
   const adocSheets = sheets.filter((s) => s.sheet_type === 'ADOC').sort((a, b) => a.sheet_number - b.sheet_number);
   const drcvSheets = sheets.filter((s) => s.sheet_type === 'DRCV').sort((a, b) => a.sheet_number - b.sheet_number);
+  const activeSheets = sheets.filter((s) => s.status !== 'validated');
 
   const avgGrade = validations.filter((v) => v.session_grade).length
     ? (validations.reduce((s, v) => s + (parseFloat(v.session_grade) || 0), 0) / validations.filter((v) => v.session_grade).length).toFixed(1)
     : '—';
+
+  const openValidation = (sheet) => setShowValidationForm({
+    activity_sheet_id: sheet.id,
+    sheet_type: sheet.sheet_type,
+    sheet_number: sheet.sheet_number,
+    sheet_title: sheet.title,
+    last_name: student.last_name,
+    first_name: student.first_name,
+  });
 
   return (
     <>
@@ -69,9 +192,9 @@ export default function StudentDetail({ student, onClose }) {
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '2px solid #e0e0e0', background: '#f8f9fa' }}>
             {[
-              { id: 'sheets',      label: '📋 Fiches' },
-              { id: 'sessions',    label: '📅 Sessions' },
-              { id: 'validations', label: '✅ Validations' },
+              { id: 'sheets',      label: `📋 Fiches (${sheets.length})` },
+              { id: 'sessions',    label: `📅 Sessions (${sessions.length})` },
+              { id: 'validations', label: `✅ Validations (${validations.length})` },
             ].map((t) => (
               <button
                 key={t.id}
@@ -91,7 +214,7 @@ export default function StudentDetail({ student, onClose }) {
           </div>
 
           {/* Contenu */}
-          <div style={{ padding: 20, overflowY: 'auto', maxHeight: 'calc(80vh - 160px)' }}>
+          <div style={{ padding: 20, overflowY: 'auto', maxHeight: 'calc(88vh - 160px)' }}>
             {loading && <p style={{ color: '#7f8c8d' }}>Chargement...</p>}
 
             {/* ===== ONGLET FICHES ===== */}
@@ -110,7 +233,7 @@ export default function StudentDetail({ student, onClose }) {
                             <span className={`badge ${st.cls}`}>{st.label}</span>
                             {sheet.title && <span style={{ fontSize: '0.82rem', color: '#7f8c8d' }}>{sheet.title}</span>}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             {!isNaN(grade) && (
                               <span style={{ fontWeight: 600, color: grade >= 8 ? '#27ae60' : grade >= 6 ? '#f39c12' : '#e74c3c' }}>
                                 {grade.toFixed(1)}/10
@@ -119,25 +242,18 @@ export default function StudentDetail({ student, onClose }) {
                             <span style={{ fontSize: '0.78rem', color: '#aaa' }}>{sheet.sessions_count || 0} session(s)</span>
                             {sheet.status !== 'validated' && (
                               <button
-                                className="btn btn-primary"
+                                className={`btn ${sheet.status === 'not_started' ? 'btn-primary' : 'btn-outline'}`}
                                 style={{ fontSize: '0.78rem', padding: '4px 10px' }}
                                 onClick={() => setShowSessionForm(sheet.id)}
                               >
-                                + Session
+                                {sheet.status === 'not_started' ? '▶ Démarrer' : '+ Session'}
                               </button>
                             )}
                             {sheet.status === 'in_progress' && (
                               <button
                                 className="btn btn-success"
                                 style={{ fontSize: '0.78rem', padding: '4px 10px' }}
-                                onClick={() => setShowValidationForm({
-                                  activity_sheet_id: sheet.id,
-                                  sheet_type: sheet.sheet_type,
-                                  sheet_number: sheet.sheet_number,
-                                  sheet_title: sheet.title,
-                                  last_name: student.last_name,
-                                  first_name: student.first_name,
-                                })}
+                                onClick={() => openValidation(sheet)}
                               >
                                 Valider
                               </button>
@@ -158,37 +274,26 @@ export default function StudentDetail({ student, onClose }) {
                   <span style={{ fontWeight: 600 }}>{sessions.length} session(s) enregistrée(s)</span>
                   <button
                     className="btn btn-primary"
-                    onClick={() => setShowSessionForm(sheets[0]?.id)}
-                    disabled={!sheets.length}
+                    onClick={() => setShowSessionForm('__select__')}
+                    disabled={!activeSheets.length}
                   >
                     + Nouvelle session
                   </button>
                 </div>
                 {sessions.length === 0 && (
-                  <p style={{ color: '#7f8c8d', textAlign: 'center', padding: 24 }}>Aucune session enregistrée.</p>
+                  <p style={{ color: '#7f8c8d', textAlign: 'center', padding: 24 }}>
+                    Aucune session. Utilisez "▶ Démarrer" dans l'onglet Fiches pour la première session.
+                  </p>
                 )}
-                {sessions.map((s) => {
-                  const st = SESSION_STATUS[s.status] || SESSION_STATUS.scheduled;
-                  return (
-                    <div key={s.id} style={sessionCard}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <div style={{ fontWeight: 600 }}>
-                            {new Date(s.session_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                            {s.session_time && ` · ${s.session_time.slice(0, 5)}`}
-                          </div>
-                          {s.location && <div style={{ fontSize: '0.82rem', color: '#7f8c8d' }}>📍 {s.location}</div>}
-                          {s.objective && <div style={{ fontSize: '0.84rem', marginTop: 4 }}>{s.objective}</div>}
-                          <div style={{ fontSize: '0.78rem', color: '#aaa', marginTop: 4 }}>
-                            {s.sheet_type} {s.sheet_number}
-                            {s.teacher_name && ` · ${s.teacher_name}`}
-                          </div>
-                        </div>
-                        <span className={`badge ${st.cls}`}>{st.label}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {sessions.map((s) => (
+                  <SessionCard
+                    key={s.id}
+                    session={s}
+                    sheets={sheets}
+                    onStatusChange={reload}
+                    onValidate={openValidation}
+                  />
+                ))}
               </>
             )}
 
@@ -232,7 +337,8 @@ export default function StudentDetail({ student, onClose }) {
       {showSessionForm && (
         <SessionForm
           student={student}
-          activitySheetId={showSessionForm}
+          activitySheetId={showSessionForm === '__select__' ? null : showSessionForm}
+          sheets={showSessionForm === '__select__' ? activeSheets : null}
           onClose={() => setShowSessionForm(null)}
           onSaved={() => { setShowSessionForm(null); reload(); }}
         />
@@ -257,8 +363,8 @@ const overlay = {
 };
 const modal = {
   background: 'white', borderRadius: 10,
-  width: '100%', maxWidth: 640,
-  maxHeight: '85vh',
+  width: '100%', maxWidth: 660,
+  maxHeight: '88vh',
   boxShadow: '0 24px 80px rgba(0,0,0,0.35)',
   display: 'flex', flexDirection: 'column',
   overflow: 'hidden',
