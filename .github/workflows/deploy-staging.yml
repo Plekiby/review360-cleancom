@@ -1,0 +1,75 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy-staging:
+    name: Deploy to O2switch staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        working-directory: frontend
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: https://staging.suivi360.cleancom.fr/api
+
+      - name: Deploy backend via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.O2SWITCH_HOST }}
+          username: ${{ secrets.O2SWITCH_USER }}
+          key: ${{ secrets.O2SWITCH_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/apps/review360-backend-staging
+            git pull origin develop
+            npm ci --production
+            # Appliquer migrations
+            NODE_ENV=staging node src/db/migrate.js
+            pm2 restart review360-staging || pm2 start src/server.js --name review360-staging
+            echo "✅ Backend staging redémarré"
+
+      - name: Deploy frontend via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        with:
+          host: ${{ secrets.O2SWITCH_HOST }}
+          username: ${{ secrets.O2SWITCH_USER }}
+          key: ${{ secrets.O2SWITCH_SSH_KEY }}
+          script: |
+            rm -rf ~/apps/review360-frontend-staging/dist
+            mkdir -p ~/apps/review360-frontend-staging/dist
+
+      - name: Copy frontend build
+        uses: appleboy/scp-action@v0.1.7
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        with:
+          host: ${{ secrets.O2SWITCH_HOST }}
+          username: ${{ secrets.O2SWITCH_USER }}
+          key: ${{ secrets.O2SWITCH_SSH_KEY }}
+          source: 'frontend/dist/*'
+          target: '~/apps/review360-frontend-staging/dist'
+          strip_components: 2
+
+      - name: Smoke test staging
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://staging.suivi360.cleancom.fr/health || echo "000")
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Staging health check failed (HTTP $STATUS)"
+            exit 1
+          fi
+          echo "✅ Staging OK"
