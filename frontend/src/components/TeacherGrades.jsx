@@ -9,13 +9,17 @@ export default function TeacherGrades() {
   const [loading, setLoading] = useState(true);
   const [filterStudent, setFilterStudent] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [filterPeriod, setFilterPeriod] = useState('all');
 
   useEffect(() => {
-    api.getValidations({}).then((data) => {
+    const params = {};
+    if (filterPeriod !== 'all') params.period = filterPeriod;
+    setLoading(true);
+    api.getValidations(params).then((data) => {
       setValidations(data);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  }, [filterPeriod]);
 
   const students = [...new Map(validations.map((v) => [v.student_number, { id: v.student_number, name: `${v.last_name} ${v.first_name}` }])).values()];
 
@@ -106,6 +110,12 @@ export default function TeacherGrades() {
           <option value="all">Toutes les fiches</option>
           <option value="ADOC">ADOC</option>
           <option value="DRCV">DRCV</option>
+        </select>
+        <select value={filterPeriod} onChange={(e) => setFilterPeriod(e.target.value)}>
+          <option value="all">Toutes les périodes</option>
+          <option value="week">Cette semaine</option>
+          <option value="month">Ce mois</option>
+          <option value="quarter">Ce trimestre</option>
         </select>
       </div>
 

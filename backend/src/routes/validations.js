@@ -11,10 +11,27 @@ router.post('/', requireAuth, async (req, res, next) => {
     await client.query('BEGIN');
 
     const {
-      session_id, activity_sheet_id,
+      session_id: providedSessionId, activity_sheet_id,
       has_subject, context_well_formulated, objectives_validated,
       methodology_respected, session_grade, comments
     } = req.body;
+
+    // Si pas de session fournie → en créer une automatiquement (validation directe)
+    let session_id = providedSessionId;
+    if (!session_id) {
+      const sheetForSession = await client.query(
+        'SELECT student_id FROM activity_sheets WHERE id = $1',
+        [activity_sheet_id]
+      );
+      const studentId = sheetForSession.rows[0]?.student_id;
+      const autoSession = await client.query(
+        `INSERT INTO follow_up_sessions (student_id, activity_sheet_id, teacher_id, session_date, objective, status)
+         VALUES ($1, $2, $3, CURRENT_DATE, 'Validation directe', 'completed')
+         RETURNING id`,
+        [studentId, activity_sheet_id, req.user.id]
+      );
+      session_id = autoSession.rows[0].id;
+    }
 
     // Créer la validation
     const valResult = await client.query(
@@ -79,7 +96,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 // GET /api/validations?studentId=X&status=urgent — historique + filtres
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const { studentId, status, sheetId } = req.query;
+    const { studentId, status, sheetId, period } = req.query;
     const conditions = ['s.school_id = $1'];
     const params = [req.user.school_id];
 
@@ -98,6 +115,14 @@ router.get('/', requireAuth, async (req, res, next) => {
       conditions.push(`v.created_at < NOW() - INTERVAL '7 days'`);
     } else if (status === 'in_progress') {
       conditions.push(`ash.status = 'in_progress'`);
+    }
+
+    if (period === 'week') {
+      conditions.push(`v.created_at >= NOW() - INTERVAL '7 days'`);
+    } else if (period === 'month') {
+      conditions.push(`v.created_at >= NOW() - INTERVAL '30 days'`);
+    } else if (period === 'quarter') {
+      conditions.push(`v.created_at >= NOW() - INTERVAL '90 days'`);
     }
 
     const result = await query(

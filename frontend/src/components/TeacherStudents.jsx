@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import StudentDetail from './StudentDetail';
 
 function gradeClass(g) {
   if (g >= 8) return 'grade-high';
@@ -25,6 +26,7 @@ export default function TeacherStudents({ user }) {
   const [students, setStudents] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -134,7 +136,7 @@ export default function TeacherStudents({ user }) {
                     </td>
                     <td>{statusBadge(status)}</td>
                     <td>
-                      <button className="btn btn-primary">Voir détail</button>
+                      <button className="btn btn-primary" onClick={() => setSelectedStudent(s)}>Voir détail</button>
                     </td>
                   </tr>
                 );
@@ -146,6 +148,13 @@ export default function TeacherStudents({ user }) {
           </table>
         </div>
       </div>
+
+      {selectedStudent && (
+        <StudentDetail
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
     </>
   );
 }

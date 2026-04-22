@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import ImportStudents from './ImportStudents';
+import StudentDetail from './StudentDetail';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -22,6 +23,8 @@ export default function AdminClassDetail() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [escalating, setEscalating] = useState(null);
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -35,6 +38,19 @@ export default function AdminClassDetail() {
     if (!selectedClass) return;
     api.getClassStudents(selectedClass).then(setStudents);
   }, [selectedClass]);
+
+  const handleEscalade = async (s) => {
+    if (!window.confirm(`Escalader ${s.last_name} ${s.first_name} en alerte ROUGE ?`)) return;
+    setEscalating(s.id);
+    try {
+      await api.createAlert({ student_id: s.id });
+      api.getClassStudents(selectedClass).then(setStudents);
+    } catch (err) {
+      alert(`Erreur : ${err.message}`);
+    } finally {
+      setEscalating(null);
+    }
+  };
 
   if (loading) return <div className="info-card">Chargement...</div>;
 
@@ -155,7 +171,16 @@ export default function AdminClassDetail() {
                           ? <span className="badge badge-danger">Alerte critique</span>
                           : <span className="badge badge-warning">Note insuffisante</span>}
                       </td>
-                      <td><button className="btn btn-warning">Escalader</button></td>
+                      <td>
+                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setSelectedStudent(s)}>Convoquer</button>
+                        <button
+                          className="btn btn-warning"
+                          disabled={escalating === s.id}
+                          onClick={() => handleEscalade(s)}
+                        >
+                          {escalating === s.id ? '...' : 'Escalader'}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -215,6 +240,13 @@ export default function AdminClassDetail() {
           </ul>
         </div>
       </div>
+
+      {selectedStudent && (
+        <StudentDetail
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
     </>
   );
 }

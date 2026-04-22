@@ -9,6 +9,7 @@ import studentsRoutes from './routes/students.js';
 import sessionsRoutes from './routes/sessions.js';
 import validationsRoutes from './routes/validations.js';
 import dashboardRoutes from './routes/dashboard.js';
+import alertsRoutes from './routes/alerts.js';
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.use('/api/students', studentsRoutes);
 app.use('/api/sessions', sessionsRoutes);
 app.use('/api/validations', validationsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/alerts', alertsRoutes);
 
 app.use((err, req, res, next) => {
   console.error(`[ERROR] ${err.message}`);

@@ -89,4 +89,27 @@ export const api = {
   getTeacherDashboard: () => request('/dashboard/teacher'),
   getSchoolDashboard: () => request('/dashboard/school'),
   getReports: () => request('/dashboard/reports'),
+
+  // Alerts
+  createAlert: (data) => request('/alerts', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Exports (return blob URL for download)
+  exportPDF: async () => {
+    const token = getToken();
+    const res = await fetch(`${BASE}/dashboard/export/pdf`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Erreur export PDF');
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
+  exportExcel: async () => {
+    const token = getToken();
+    const res = await fetch(`${BASE}/dashboard/export/excel`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Erreur export Excel');
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
 };

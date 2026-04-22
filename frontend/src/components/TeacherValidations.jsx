@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import ValidationForm from './ValidationForm';
 
 export default function TeacherValidations() {
   const [urgent, setUrgent] = useState([]);
@@ -9,8 +10,9 @@ export default function TeacherValidations() {
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('all');
   const [search, setSearch] = useState('');
+  const [showValidation, setShowValidation] = useState(null);
 
-  useEffect(() => {
+  const reload = () => {
     Promise.all([
       api.getValidations({ status: 'urgent' }),
       api.getValidations({ status: 'in_progress' }),
@@ -19,13 +21,14 @@ export default function TeacherValidations() {
     ]).then(([u, ip, all, dash]) => {
       setUrgent(u);
       setInProgress(ip);
-      // Validations des 7 derniers jours
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
       setRecent(all.filter((v) => new Date(v.created_at) > sevenDaysAgo));
       setStats(dash.stats || {});
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { reload(); }, []);
 
   const filterRows = (rows) => {
     let filtered = rows;
@@ -103,7 +106,21 @@ export default function TeacherValidations() {
                   <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
                   <td><span className="badge badge-danger">{Math.round(v.days_since_validation)} j</span></td>
                   <td><span className="badge badge-danger">URGENT</span></td>
-                  <td><button className="btn btn-danger">Valider maintenant</button></td>
+                  <td>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => setShowValidation({
+                        activity_sheet_id: v.activity_sheet_id,
+                        sheet_type: v.sheet_type,
+                        sheet_number: v.sheet_number,
+                        sheet_title: v.sheet_title,
+                        last_name: v.last_name,
+                        first_name: v.first_name,
+                      })}
+                    >
+                      Valider maintenant
+                    </button>
+                  </td>
                 </tr>
               ))}
               {filterRows(urgent).length === 0 && (
@@ -137,7 +154,21 @@ export default function TeacherValidations() {
                   <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type}</span></td>
                   <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
                   <td>{Math.round(v.days_since_validation)} j</td>
-                  <td><button className="btn btn-primary">Valider</button></td>
+                  <td>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => setShowValidation({
+                        activity_sheet_id: v.activity_sheet_id,
+                        sheet_type: v.sheet_type,
+                        sheet_number: v.sheet_number,
+                        sheet_title: v.sheet_title,
+                        last_name: v.last_name,
+                        first_name: v.first_name,
+                      })}
+                    >
+                      Valider
+                    </button>
+                  </td>
                 </tr>
               ))}
               {filterRows(inProgress).length === 0 && (
@@ -176,6 +207,14 @@ export default function TeacherValidations() {
           </div>
         )}
       </div>
+
+      {showValidation && (
+        <ValidationForm
+          validation={showValidation}
+          onClose={() => setShowValidation(null)}
+          onSaved={() => { setShowValidation(null); reload(); }}
+        />
+      )}
     </>
   );
 }

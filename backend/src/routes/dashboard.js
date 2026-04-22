@@ -1,6 +1,8 @@
 import express from 'express';
 import { query } from '../config/db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { generateReportPDF } from '../utils/pdfGenerator.js';
+import { generateReportExcel } from '../utils/excelGenerator.js';
 
 const router = express.Router();
 
@@ -168,6 +170,80 @@ router.get('/reports', requireAdmin, async (req, res, next) => {
     );
 
     res.json({ summary: summary.rows[0], by_class: byClass.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Helpers partagés export ────────────────────────────────────────────────
+async function fetchReportData(school_id) {
+  const summary = await query(
+    `SELECT
+       COUNT(DISTINCT s.id) AS total_students,
+       COUNT(DISTINCT ash.id) AS total_sheets,
+       COUNT(DISTINCT CASE WHEN ash.status = 'validated' THEN ash.id END) AS validated_sheets,
+       ROUND(AVG(v.session_grade), 1) AS global_avg,
+       COUNT(DISTINCT CASE WHEN al.alert_type IN ('ORANGE','ROUGE') AND al.is_resolved = false THEN s.id END) AS at_risk_students
+     FROM students s
+     JOIN classes c ON s.class_id = c.id
+     LEFT JOIN activity_sheets ash ON ash.student_id = s.id
+     LEFT JOIN validations v ON v.activity_sheet_id = ash.id
+     LEFT JOIN alerts al ON al.student_id = s.id
+     WHERE c.school_id = $1 AND s.is_active = true`,
+    [school_id]
+  );
+
+  const byClass = await query(
+    `SELECT
+       c.name AS class_name,
+       u.first_name || ' ' || u.last_name AS teacher_name,
+       COUNT(DISTINCT s.id) AS students,
+       ROUND(AVG(v.session_grade), 1) AS avg_grade,
+       ROUND(100.0 * COUNT(DISTINCT CASE WHEN ash.status = 'validated' THEN ash.id END) / NULLIF(COUNT(DISTINCT ash.id), 0), 0) AS progress_pct,
+       COUNT(DISTINCT CASE WHEN al.is_resolved = false THEN al.id END) AS active_alerts
+     FROM classes c
+     LEFT JOIN users u ON c.teacher_id = u.id
+     LEFT JOIN students s ON s.class_id = c.id AND s.is_active = true
+     LEFT JOIN activity_sheets ash ON ash.student_id = s.id
+     LEFT JOIN validations v ON v.activity_sheet_id = ash.id
+     LEFT JOIN alerts al ON al.student_id = s.id
+     WHERE c.school_id = $1 AND c.is_active = true
+     GROUP BY c.id, u.first_name, u.last_name
+     ORDER BY c.name`,
+    [school_id]
+  );
+
+  const atRisk = await query(
+    `SELECT s.id, s.last_name, s.first_name, s.student_number,
+            c.name AS class_name,
+            sp.average_grade, sp.adoc_validated, sp.drcv_validated, sp.critical_alerts
+     FROM student_progress sp
+     JOIN students s ON sp.student_id = s.id
+     JOIN classes c ON s.class_id = c.id
+     WHERE c.school_id = $1 AND (sp.critical_alerts > 0 OR sp.average_grade < 6)
+     ORDER BY sp.critical_alerts DESC, sp.average_grade ASC
+     LIMIT 50`,
+    [school_id]
+  );
+
+  return { summary: summary.rows[0], byClass: byClass.rows, atRisk: atRisk.rows };
+}
+
+// GET /api/dashboard/export/pdf
+router.get('/export/pdf', requireAdmin, async (req, res, next) => {
+  try {
+    const data = await fetchReportData(req.user.school_id);
+    generateReportPDF(res, { ...data, generatedAt: new Date().toISOString().split('T')[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/dashboard/export/excel
+router.get('/export/excel', requireAdmin, async (req, res, next) => {
+  try {
+    const data = await fetchReportData(req.user.school_id);
+    await generateReportExcel(res, { ...data, generatedAt: new Date().toISOString().split('T')[0] });
   } catch (err) {
     next(err);
   }

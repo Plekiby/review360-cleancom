@@ -17,8 +17,22 @@ export default function AdminReports() {
     api.getReports().then((d) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
-  const handleExport = (format) => {
-    alert(`Export ${format.toUpperCase()} — fonctionnalité disponible après connexion au backend`);
+  const [exporting, setExporting] = useState(null);
+
+  const handleExport = async (format) => {
+    setExporting(format);
+    try {
+      const url = format === 'pdf' ? await api.exportPDF() : await api.exportExcel();
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rapport-review360.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Erreur export : ${err.message}`);
+    } finally {
+      setExporting(null);
+    }
   };
 
   if (loading) return <div className="info-card">Chargement...</div>;
@@ -51,8 +65,12 @@ export default function AdminReports() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3>📄 {REPORT_TYPES.find((r) => r.id === activeReport)?.label}</h3>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-danger" onClick={() => handleExport('pdf')}>⬇️ PDF</button>
-            <button className="btn btn-success" onClick={() => handleExport('excel')}>⬇️ Excel</button>
+            <button className="btn btn-danger" onClick={() => handleExport('pdf')} disabled={!!exporting}>
+              {exporting === 'pdf' ? 'Génération...' : '⬇️ PDF'}
+            </button>
+            <button className="btn btn-success" onClick={() => handleExport('excel')} disabled={!!exporting}>
+              {exporting === 'excel' ? 'Génération...' : '⬇️ Excel'}
+            </button>
           </div>
         </div>
 
