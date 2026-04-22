@@ -33,7 +33,7 @@ router.post('/', requireAdmin, async (req, res, next) => {
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const { studentId } = req.query;
-    const conditions = ['s.school_id = $1', 'a.is_resolved = false'];
+    const conditions = ['s.id = $1', 'a.is_resolved = false'];
     const params = [req.user.school_id];
 
     if (studentId) {
