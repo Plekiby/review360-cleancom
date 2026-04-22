@@ -102,23 +102,54 @@ router.patch('/activity-sheets/:id', requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/classes/:classId/import-students — import Excel
+// Extraire et normaliser les lignes d'un buffer Excel
+async function parseExcelBuffer(buffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const sheet = workbook.worksheets[0];
+  const headerRow = sheet.getRow(1).values.slice(1);
+  const rows = [];
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const obj = {};
+    row.values.slice(1).forEach((val, i) => { obj[headerRow[i]] = val ?? ''; });
+    rows.push(obj);
+  });
+  return rows;
+}
+
+function normalizeRow(row, lineNumber) {
+  const studentNumber = String(row['Num'] || row['Numéro'] || row['Numero'] || '').trim();
+  const firstName = String(row['Prénom'] || row['Prenom'] || '').trim();
+  const lastName = String(row['Nom'] || '').trim();
+  const email = String(row['Email'] || '').trim().toLowerCase();
+  const valid = !!(studentNumber && firstName && lastName);
+  const error = valid ? null : `Ligne ${lineNumber}: Num, Nom et Prénom requis`;
+  return { studentNumber, firstName, lastName, email, valid, error };
+}
+
+// POST /api/students/preview/:classId — parse sans insérer
+router.post('/preview/:classId', requireAuth, upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Fichier manquant' });
+    const rawRows = await parseExcelBuffer(req.file.buffer);
+    const preview = rawRows.map((row, i) => normalizeRow(row, i + 2));
+    const validCount = preview.filter((r) => r.valid).length;
+    const errorCount = preview.filter((r) => !r.valid).length;
+    res.json({ rows: preview, valid_count: validCount, error_count: errorCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/students/import/:classId — import Excel
 router.post('/import/:classId', requireAuth, upload.single('file'), async (req, res, next) => {
   const client = await getClient();
   try {
     if (!req.file) return res.status(400).json({ error: 'Fichier manquant' });
 
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
-    const sheet = workbook.worksheets[0];
-    const headerRow = sheet.getRow(1).values.slice(1); // ExcelJS est 1-indexed
-    const rows = [];
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
-      const obj = {};
-      row.values.slice(1).forEach((val, i) => { obj[headerRow[i]] = val ?? ''; });
-      rows.push(obj);
-    });
+    const rawRows = await parseExcelBuffer(req.file.buffer);
+    const normalized = rawRows.map((row, i) => normalizeRow(row, i + 2));
 
     const { school_id, id: imported_by } = req.user;
     const { classId } = req.params;
@@ -128,14 +159,11 @@ router.post('/import/:classId', requireAuth, upload.single('file'), async (req, 
     let importedCount = 0;
     const errors = [];
 
-    for (const [i, row] of rows.entries()) {
-      const studentNumber = String(row['Num'] || row['Numéro'] || '').trim();
-      const firstName = String(row['Prénom'] || row['Prenom'] || '').trim();
-      const lastName = String(row['Nom'] || '').trim();
-      const email = String(row['Email'] || '').trim().toLowerCase();
+    for (const row of normalized) {
+      const { studentNumber, firstName, lastName, email, valid, error } = row;
 
-      if (!studentNumber || !firstName || !lastName) {
-        errors.push(`Ligne ${i + 2}: données manquantes (Num, Nom, Prénom requis)`);
+      if (!valid) {
+        errors.push(error);
         continue;
       }
 

@@ -42,6 +42,20 @@ export const api = {
   updateActivitySheet: (id, data) => request(`/students/activity-sheets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Import Excel (multipart)
+  previewStudents: async (classId, file) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${BASE}/students/preview/${classId}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erreur preview');
+    return data;
+  },
+
   importStudents: async (classId, file) => {
     const token = getToken();
     const formData = new FormData();

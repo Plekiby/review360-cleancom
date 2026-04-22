@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import ImportStudents from './ImportStudents';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -20,6 +21,7 @@ export default function AdminClassDetail() {
   const [selectedClass, setSelectedClass] = useState(null);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -73,8 +75,22 @@ export default function AdminClassDetail() {
           <span className="badge badge-success">{avgGrade}/10 moy.</span>
           <span className="badge badge-warning">{totalProgress}% progression</span>
           {atRisk.length > 0 && <span className="badge badge-danger">{atRisk.length} en alerte</span>}
+          <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setShowImport(true)}>
+            📥 Importer étudiants
+          </button>
         </div>
       </div>
+
+      {showImport && (
+        <ImportStudents
+          classes={classes}
+          onClose={() => setShowImport(false)}
+          onImported={() => {
+            setShowImport(false);
+            api.getClassStudents(selectedClass).then(setStudents);
+          }}
+        />
+      )}
 
       {/* Grid ADOC + DRCV progression */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
