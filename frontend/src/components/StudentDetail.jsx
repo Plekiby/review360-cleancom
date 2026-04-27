@@ -193,14 +193,25 @@ export default function StudentDetail({ student, onClose }) {
     ? (validations.reduce((s, v) => s + (parseFloat(v.session_grade) || 0), 0) / validations.filter((v) => v.session_grade).length).toFixed(1)
     : '—';
 
-  const openValidation = (sheet) => setShowValidationForm({
-    activity_sheet_id: sheet.id,
-    sheet_type: sheet.sheet_type,
-    sheet_number: sheet.sheet_number,
-    sheet_title: sheet.title,
-    last_name: student.last_name,
-    first_name: student.first_name,
-  });
+  const openValidation = (sheet) => {
+    // Pré-remplir depuis la dernière validation partielle de cette fiche (si elle existe)
+    const lastVal = [...validations]
+      .filter((v) => v.activity_sheet_id === sheet.id)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    setShowValidationForm({
+      activity_sheet_id: sheet.id,
+      sheet_type: sheet.sheet_type,
+      sheet_number: sheet.sheet_number,
+      sheet_title: sheet.title,
+      last_name: student.last_name,
+      first_name: student.first_name,
+      has_subject: lastVal?.has_subject ?? false,
+      context_well_formulated: lastVal?.context_well_formulated ?? false,
+      objectives_validated: lastVal?.objectives_validated ?? false,
+      session_grade: lastVal?.session_grade ?? null,
+      comments: lastVal?.comments ?? null,
+    });
+  };
 
   const handleResolveAlert = async (alertId) => {
     setResolvingAlert(alertId);

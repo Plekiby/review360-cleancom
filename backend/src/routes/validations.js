@@ -116,7 +116,7 @@ router.post('/', requireAuth, async (req, res, next) => {
 // GET /api/validations?studentId=X&status=urgent — historique + filtres
 router.get('/', requireAuth, async (req, res, next) => {
   try {
-    const { studentId, status, sheetId, period } = req.query;
+    const { studentId, status, sheetId, period, teacherId } = req.query;
     const conditions = ['s.school_id = $1'];
     const params = [req.user.school_id];
 
@@ -127,6 +127,10 @@ router.get('/', requireAuth, async (req, res, next) => {
     if (sheetId) {
       params.push(sheetId);
       conditions.push(`v.activity_sheet_id = $${params.length}`);
+    }
+    if (teacherId) {
+      params.push(teacherId);
+      conditions.push(`v.teacher_id = $${params.length}`);
     }
 
     // "urgent" = validations créées il y a > 7 jours et fiche toujours in_progress

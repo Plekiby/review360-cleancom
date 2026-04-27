@@ -94,7 +94,7 @@ router.get('/school', requireAdmin, async (req, res, next) => {
     // Cards classes avec progression ADOC / DRCV
     const classCards = await query(
       `SELECT
-         c.id, c.name, c.academic_year,
+         c.id, c.name AS class_name, c.academic_year,
          u.first_name || ' ' || u.last_name AS teacher_name,
          COUNT(DISTINCT s.id) AS student_count,
          ROUND(AVG(v.session_grade), 1) AS avg_grade,

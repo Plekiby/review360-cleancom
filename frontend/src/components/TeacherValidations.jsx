@@ -18,7 +18,7 @@ function delayBadge(days) {
   return { label: `${d} j`, style: { background: '#f5b041', color: 'white' } };
 }
 
-export default function TeacherValidations() {
+export default function TeacherValidations({ user }) {
   const [urgent, setUrgent] = useState([]);
   const [inProgress, setInProgress] = useState([]);
   const [recent, setRecent] = useState([]);
@@ -29,10 +29,11 @@ export default function TeacherValidations() {
   const [showValidation, setShowValidation] = useState(null);
 
   const reload = () => {
+    const teacherParams = user?.id ? { teacherId: user.id } : {};
     Promise.all([
-      api.getValidations({ status: 'urgent' }),
-      api.getValidations({ status: 'in_progress' }),
-      api.getValidations({}),
+      api.getValidations({ status: 'urgent', ...teacherParams }),
+      api.getValidations({ status: 'in_progress', ...teacherParams }),
+      api.getValidations({ ...teacherParams }),
       api.getTeacherDashboard(),
     ]).then(([u, ip, all, dash]) => {
       setUrgent(u);
@@ -143,6 +144,11 @@ export default function TeacherValidations() {
                         sheet_title: v.sheet_title,
                         last_name: v.last_name,
                         first_name: v.first_name,
+                        has_subject: v.has_subject,
+                        context_well_formulated: v.context_well_formulated,
+                        objectives_validated: v.objectives_validated,
+                        session_grade: v.session_grade,
+                        comments: v.comments,
                       })}
                     >
                       Valider maintenant
@@ -196,6 +202,11 @@ export default function TeacherValidations() {
                         sheet_title: v.sheet_title,
                         last_name: v.last_name,
                         first_name: v.first_name,
+                        has_subject: v.has_subject,
+                        context_well_formulated: v.context_well_formulated,
+                        objectives_validated: v.objectives_validated,
+                        session_grade: v.session_grade,
+                        comments: v.comments,
                       })}
                     >
                       Valider

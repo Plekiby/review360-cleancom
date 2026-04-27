@@ -21,20 +21,22 @@ router.get('/:id/dashboard', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /api/students/:id/activity-sheets — fiches ADOC + DRCV
+// GET /api/students/:id/activity-sheets — fiches ADOC + DRCV (scopé à l'école du user)
 router.get('/:id/activity-sheets', requireAuth, async (req, res, next) => {
   try {
     const result = await query(
       `SELECT ash.*,
-              COUNT(fs.id) AS sessions_count,
-              AVG(v.session_grade) AS avg_grade
+              COUNT(DISTINCT fs.id) AS sessions_count,
+              AVG(DISTINCT v.session_grade) AS avg_grade
        FROM activity_sheets ash
+       JOIN students s ON ash.student_id = s.id
+       JOIN classes c ON s.class_id = c.id
        LEFT JOIN follow_up_sessions fs ON fs.activity_sheet_id = ash.id
        LEFT JOIN validations v ON v.activity_sheet_id = ash.id
-       WHERE ash.student_id = $1
+       WHERE ash.student_id = $1 AND c.school_id = $2
        GROUP BY ash.id
        ORDER BY ash.sheet_type, ash.sheet_number`,
-      [req.params.id]
+      [req.params.id, req.user.school_id]
     );
     res.json(result.rows);
   } catch (err) {
@@ -78,24 +80,26 @@ router.post('/:id/activity-sheets', requireAuth, async (req, res, next) => {
   }
 });
 
-// PATCH /api/activity-sheets/:id — mettre à jour titre/contexte/objectifs
+// PATCH /api/activity-sheets/:id — mettre à jour titre/contexte/objectifs (scopé à l'école)
 router.patch('/activity-sheets/:id', requireAuth, async (req, res, next) => {
   try {
     const { title, context, objectives, methodology, status, final_grade } = req.body;
     const result = await query(
-      `UPDATE activity_sheets
-       SET title = COALESCE($1, title),
-           context = COALESCE($2, context),
-           objectives = COALESCE($3, objectives),
-           methodology = COALESCE($4, methodology),
-           status = COALESCE($5, status),
-           final_grade = COALESCE($6, final_grade),
+      `UPDATE activity_sheets ash
+       SET title = COALESCE($1, ash.title),
+           context = COALESCE($2, ash.context),
+           objectives = COALESCE($3, ash.objectives),
+           methodology = COALESCE($4, ash.methodology),
+           status = COALESCE($5, ash.status),
+           final_grade = COALESCE($6, ash.final_grade),
            updated_at = NOW()
-       WHERE id = $7
-       RETURNING *`,
-      [title, context, objectives, methodology, status, final_grade, req.params.id]
+       FROM students s
+       JOIN classes c ON s.class_id = c.id
+       WHERE ash.id = $7 AND ash.student_id = s.id AND c.school_id = $8
+       RETURNING ash.*`,
+      [title, context, objectives, methodology, status, final_grade, req.params.id, req.user.school_id]
     );
-    if (!result.rows[0]) return res.status(404).json({ error: 'Fiche introuvable' });
+    if (!result.rows[0]) return res.status(404).json({ error: 'Fiche introuvable ou accès refusé' });
     res.json(result.rows[0]);
   } catch (err) {
     next(err);
@@ -174,8 +178,8 @@ router.post('/import/:classId', requireAuth, upload.single('file'), async (req, 
     let importedCount = 0;
     const errors = [];
 
-    for (const row of normalized) {
-      const { studentNumber, firstName, lastName, email, valid, error } = row;
+    for (let i = 0; i < normalized.length; i++) {
+      const { studentNumber, firstName, lastName, email, valid, error } = normalized[i];
 
       if (!valid) {
         errors.push(error);

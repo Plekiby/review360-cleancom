@@ -112,7 +112,9 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
           classes={classes}
           onClose={() => setShowImport(false)}
           onImported={() => {
-            setShowImport(false);
+            // Ne pas fermer ici — ImportStudents affiche l'écran de succès,
+            // l'utilisateur ferme lui-même via le bouton "Fermer".
+            // On recharge simplement les étudiants en arrière-plan.
             api.getClassStudents(selectedClass).then(setStudents);
           }}
         />

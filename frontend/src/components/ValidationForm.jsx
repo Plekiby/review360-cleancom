@@ -22,12 +22,12 @@ const CHECKPOINTS = [
 export default function ValidationForm({ validation, onClose, onSaved }) {
   // validation = { id, activity_sheet_id, sheet_type, sheet_number, sheet_title, last_name, first_name }
   const [checks, setChecks] = useState({
-    has_subject: false,
-    context_well_formulated: false,
-    objectives_validated: false,
+    has_subject: !!validation.has_subject,
+    context_well_formulated: !!validation.context_well_formulated,
+    objectives_validated: !!validation.objectives_validated,
   });
-  const [grade, setGrade] = useState('');
-  const [comments, setComments] = useState('');
+  const [grade, setGrade] = useState(validation.session_grade != null ? String(validation.session_grade) : '');
+  const [comments, setComments] = useState(validation.comments || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
