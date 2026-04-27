@@ -33,6 +33,7 @@ export const api = {
   // Classes
   getClasses: () => request('/classes'),
   createClass: (data) => request('/classes', { method: 'POST', body: JSON.stringify(data) }),
+  updateClass: (id, data) => request(`/classes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   getClassStudents: (classId) => request(`/classes/${classId}/students`),
 
   // Students
@@ -40,6 +41,8 @@ export const api = {
   getActivitySheets: (studentId) => request(`/students/${studentId}/activity-sheets`),
   createActivitySheets: (studentId) => request(`/students/${studentId}/activity-sheets`, { method: 'POST' }),
   updateActivitySheet: (id, data) => request(`/students/activity-sheets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  createStudent: (data) => request('/students', { method: 'POST', body: JSON.stringify(data) }),
+  updateStudent: (id, data) => request(`/students/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Import Excel (multipart)
   previewStudents: async (classId, file) => {
@@ -92,6 +95,14 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return request(`/dashboard/reports${qs ? `?${qs}` : ''}`);
   },
+
+  // Users (admin only)
+  getUsers: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/users${qs ? `?${qs}` : ''}`);
+  },
+  createUser: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id, data) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   // Alerts
   createAlert: (data) => request('/alerts', { method: 'POST', body: JSON.stringify(data) }),

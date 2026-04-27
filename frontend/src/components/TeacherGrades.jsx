@@ -5,6 +5,8 @@ import StudentDetail from './StudentDetail';
 const ADOC_LABELS = ['ADOC 1', 'ADOC 2', 'ADOC 3', 'ADOC 4', 'ADOC 5'];
 const DRCV_LABELS = ['DRCV 1', 'DRCV 2', 'DRCV 3', 'DRCV 4'];
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
 export default function TeacherGrades() {
   const [validations, setValidations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +14,8 @@ export default function TeacherGrades() {
   const [filterType, setFilterType] = useState('all');
   const [filterPeriod, setFilterPeriod] = useState('all');
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     const params = {};
@@ -22,6 +26,8 @@ export default function TeacherGrades() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [filterPeriod]);
+
+  useEffect(() => { setPage(1); }, [filterStudent, filterType, filterPeriod]);
 
   const students = [...new Map(validations.map((v) => [v.student_number, { id: v.student_number, name: `${v.last_name} ${v.first_name}` }])).values()];
 
@@ -163,54 +169,73 @@ export default function TeacherGrades() {
       <div className="info-card">
         <h3>📋 Historique des évaluations</h3>
         <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Étudiant</th>
-                <th>Fiche</th>
-                <th>Note</th>
-                <th>Commentaire</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((v) => (
-                <tr key={v.id}>
-                  <td style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
-                  <td><strong>{v.last_name} {v.first_name}</strong></td>
-                  <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type} {v.sheet_number}</span></td>
-                  <td>
-                    {v.session_grade
-                      ? <span className={`${v.session_grade >= 8 ? 'grade-high' : v.session_grade >= 6 ? 'grade-medium' : 'grade-low'}`}>{parseFloat(v.session_grade).toFixed(1)}/10</span>
-                      : <span style={{ color: '#aaa' }}>—</span>}
-                  </td>
-                  <td>
-                    {v.comments
-                      ? <div className="comment-box">{v.comments}</div>
-                      : <span style={{ color: '#aaa', fontSize: '0.8rem' }}>—</span>}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-primary"
-                      style={{ fontSize: '0.8rem', padding: '4px 10px' }}
-                      onClick={() => setSelectedStudent({
-                        id: v.student_id,
-                        last_name: v.last_name,
-                        first_name: v.first_name,
-                        student_number: v.student_number,
-                      })}
-                    >
-                      Voir détail
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: '#7f8c8d', padding: 24 }}>Aucune évaluation</td></tr>
-              )}
-            </tbody>
-          </table>
+          {(() => {
+            const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+            const safePage = Math.min(page, totalPages);
+            const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+            return (
+              <>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Étudiant</th>
+                      <th>Fiche</th>
+                      <th>Note</th>
+                      <th>Commentaire</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((v) => (
+                      <tr key={v.id}>
+                        <td style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
+                        <td><strong>{v.last_name} {v.first_name}</strong></td>
+                        <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type} {v.sheet_number}</span></td>
+                        <td>
+                          {v.session_grade
+                            ? <span className={`${v.session_grade >= 8 ? 'grade-high' : v.session_grade >= 6 ? 'grade-medium' : 'grade-low'}`}>{parseFloat(v.session_grade).toFixed(1)}/10</span>
+                            : <span style={{ color: '#aaa' }}>—</span>}
+                        </td>
+                        <td>
+                          {v.comments
+                            ? <div className="comment-box">{v.comments}</div>
+                            : <span style={{ color: '#aaa', fontSize: '0.8rem' }}>—</span>}
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-primary"
+                            style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                            onClick={() => setSelectedStudent({
+                              id: v.student_id,
+                              last_name: v.last_name,
+                              first_name: v.first_name,
+                              student_number: v.student_number,
+                            })}
+                          >
+                            Voir détail
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {filtered.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: '#7f8c8d', padding: 24 }}>Aucune évaluation</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                {filtered.length > 10 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', marginTop: 12 }}>
+                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1} className="btn btn-outline" style={{ padding: '4px 10px' }}>‹</button>
+                    <span style={{ fontSize: '0.85rem' }}>{safePage} / {totalPages}</span>
+                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="btn btn-outline" style={{ padding: '4px 10px' }}>›</button>
+                    <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ fontSize: '0.82rem', padding: '4px 8px' }}>
+                      {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n} / page</option>)}
+                    </select>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 

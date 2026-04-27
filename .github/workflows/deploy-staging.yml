@@ -19,7 +19,6 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        if: ${{ hashFiles('frontend/package.json') != '' }}
         run: |
           npm ci
           npm run build
@@ -36,37 +35,45 @@ jobs:
             set -e
             cd ~/apps/review360-backend-staging
             git pull origin develop
+            cd backend
             npm ci --production
-            # Appliquer migrations
             NODE_ENV=staging node src/db/migrate.js
-            pm2 restart review360-staging || pm2 start src/server.js --name review360-staging
+            pm2 restart review360-staging || pm2 start ecosystem.config.js --only review360-staging
             echo "✅ Backend staging redémarré"
 
-      - name: Deploy frontend via SSH
+      - name: Clear old frontend files
         uses: appleboy/ssh-action@v1.0.3
-        if: ${{ hashFiles('frontend/package.json') != '' }}
         with:
           host: ${{ secrets.O2SWITCH_HOST }}
           username: ${{ secrets.O2SWITCH_USER }}
           key: ${{ secrets.O2SWITCH_SSH_KEY }}
           script: |
-            rm -rf ~/apps/review360-frontend-staging/dist
-            mkdir -p ~/apps/review360-frontend-staging/dist
+            rm -rf ~/staging.suivi360.cleancom.fr/*
+            mkdir -p ~/staging.suivi360.cleancom.fr
 
       - name: Copy frontend build
         uses: appleboy/scp-action@v0.1.7
-        if: ${{ hashFiles('frontend/package.json') != '' }}
         with:
           host: ${{ secrets.O2SWITCH_HOST }}
           username: ${{ secrets.O2SWITCH_USER }}
           key: ${{ secrets.O2SWITCH_SSH_KEY }}
           source: 'frontend/dist/*'
-          target: '~/apps/review360-frontend-staging/dist'
+          target: '~/staging.suivi360.cleancom.fr/'
           strip_components: 2
+
+      - name: Copy .htaccess
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.O2SWITCH_HOST }}
+          username: ${{ secrets.O2SWITCH_USER }}
+          key: ${{ secrets.O2SWITCH_SSH_KEY }}
+          source: 'backend/.htaccess'
+          target: '~/staging.suivi360.cleancom.fr/'
+          strip_components: 1
 
       - name: Smoke test staging
         run: |
-          sleep 10
+          sleep 15
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://staging.suivi360.cleancom.fr/health || echo "000")
           if [ "$STATUS" != "200" ]; then
             echo "❌ Staging health check failed (HTTP $STATUS)"

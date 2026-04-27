@@ -18,6 +18,8 @@ function delayBadge(days) {
   return { label: `${d} j`, style: { background: '#f5b041', color: 'white' } };
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
 export default function TeacherValidations({ user }) {
   const [urgent, setUrgent] = useState([]);
   const [inProgress, setInProgress] = useState([]);
@@ -27,6 +29,10 @@ export default function TeacherValidations({ user }) {
   const [filterType, setFilterType] = useState('all');
   const [search, setSearch] = useState('');
   const [showValidation, setShowValidation] = useState(null);
+  const [urgentPage, setUrgentPage] = useState(1);
+  const [urgentPageSize, setUrgentPageSize] = useState(10);
+  const [ipPage, setIpPage] = useState(1);
+  const [ipPageSize, setIpPageSize] = useState(10);
 
   const reload = () => {
     const teacherParams = user?.id ? { teacherId: user.id } : {};
@@ -102,65 +108,85 @@ export default function TeacherValidations({ user }) {
       <div className="info-card">
         <h3>⚠️ Validations urgentes (&gt; 7 jours)</h3>
         <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Étudiant</th>
-                <th>Fiche</th>
-                <th>Type</th>
-                <th>Soumise le</th>
-                <th>Délai</th>
-                <th>Priorité</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filterRows(urgent).map((v) => (
-                <tr key={v.id} className="urgent">
-                  <td><strong>{v.last_name} {v.first_name}</strong></td>
-                  <td>{v.sheet_title || `${v.sheet_type} ${v.sheet_number}`}</td>
-                  <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type}</span></td>
-                  <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
-                  <td>
-                    {(() => {
-                      const b = delayBadge(v.days_since_validation);
-                      return <span className="badge" style={{ ...b.style, padding: '3px 10px' }}>{b.label}</span>;
-                    })()}
-                  </td>
-                  <td>
-                    {Math.round(v.days_since_validation || 0) >= 21
-                      ? <span className="badge badge-danger" style={{ background: '#7b0e0e' }}>CRITIQUE</span>
-                      : Math.round(v.days_since_validation || 0) >= 14
-                        ? <span className="badge badge-danger">URGENT</span>
-                        : <span className="badge badge-warning">À TRAITER</span>}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => setShowValidation({
-                        activity_sheet_id: v.activity_sheet_id,
-                        sheet_type: v.sheet_type,
-                        sheet_number: v.sheet_number,
-                        sheet_title: v.sheet_title,
-                        last_name: v.last_name,
-                        first_name: v.first_name,
-                        has_subject: v.has_subject,
-                        context_well_formulated: v.context_well_formulated,
-                        objectives_validated: v.objectives_validated,
-                        session_grade: v.session_grade,
-                        comments: v.comments,
-                      })}
-                    >
-                      Valider maintenant
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filterRows(urgent).length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', color: '#27ae60', padding: 16 }}>✅ Aucune validation urgente</td></tr>
-              )}
-            </tbody>
-          </table>
+          {(() => {
+            const rows = filterRows(urgent);
+            const totalPages = Math.max(1, Math.ceil(rows.length / urgentPageSize));
+            const safePage = Math.min(urgentPage, totalPages);
+            const paginated = rows.slice((safePage - 1) * urgentPageSize, safePage * urgentPageSize);
+            return (
+              <>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Étudiant</th>
+                      <th>Fiche</th>
+                      <th>Type</th>
+                      <th>Soumise le</th>
+                      <th>Délai</th>
+                      <th>Priorité</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((v) => (
+                      <tr key={v.id} className="urgent">
+                        <td><strong>{v.last_name} {v.first_name}</strong></td>
+                        <td>{v.sheet_title || `${v.sheet_type} ${v.sheet_number}`}</td>
+                        <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type}</span></td>
+                        <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
+                        <td>
+                          {(() => {
+                            const b = delayBadge(v.days_since_validation);
+                            return <span className="badge" style={{ ...b.style, padding: '3px 10px' }}>{b.label}</span>;
+                          })()}
+                        </td>
+                        <td>
+                          {Math.round(v.days_since_validation || 0) >= 21
+                            ? <span className="badge badge-danger" style={{ background: '#7b0e0e' }}>CRITIQUE</span>
+                            : Math.round(v.days_since_validation || 0) >= 14
+                              ? <span className="badge badge-danger">URGENT</span>
+                              : <span className="badge badge-warning">À TRAITER</span>}
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => setShowValidation({
+                              activity_sheet_id: v.activity_sheet_id,
+                              sheet_type: v.sheet_type,
+                              sheet_number: v.sheet_number,
+                              sheet_title: v.sheet_title,
+                              last_name: v.last_name,
+                              first_name: v.first_name,
+                              has_subject: v.has_subject,
+                              context_well_formulated: v.context_well_formulated,
+                              objectives_validated: v.objectives_validated,
+                              session_grade: v.session_grade,
+                              comments: v.comments,
+                            })}
+                          >
+                            Valider maintenant
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length === 0 && (
+                      <tr><td colSpan={7} style={{ textAlign: 'center', color: '#27ae60', padding: 16 }}>✅ Aucune validation urgente</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                {rows.length > 10 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', marginTop: 12 }}>
+                    <button onClick={() => setUrgentPage((p) => Math.max(1, p - 1))} disabled={safePage === 1} className="btn btn-outline" style={{ padding: '4px 10px' }}>‹</button>
+                    <span style={{ fontSize: '0.85rem' }}>{safePage} / {totalPages}</span>
+                    <button onClick={() => setUrgentPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="btn btn-outline" style={{ padding: '4px 10px' }}>›</button>
+                    <select value={urgentPageSize} onChange={(e) => { setUrgentPageSize(Number(e.target.value)); setUrgentPage(1); }} style={{ fontSize: '0.82rem', padding: '4px 8px' }}>
+                      {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n} / page</option>)}
+                    </select>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -168,57 +194,77 @@ export default function TeacherValidations({ user }) {
       <div className="info-card">
         <h3>🔄 En cours</h3>
         <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Étudiant</th>
-                <th>Fiche</th>
-                <th>Type</th>
-                <th>Soumise le</th>
-                <th>Délai</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filterRows(inProgress).map((v) => (
-                <tr key={v.id}>
-                  <td><strong>{v.last_name} {v.first_name}</strong></td>
-                  <td>{v.sheet_title || `${v.sheet_type} ${v.sheet_number}`}</td>
-                  <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type}</span></td>
-                  <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
-                  <td>
-                    {(() => {
-                      const b = delayBadge(v.days_since_validation);
-                      return <span className="badge" style={{ ...b.style, padding: '3px 10px' }}>{b.label}</span>;
-                    })()}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => setShowValidation({
-                        activity_sheet_id: v.activity_sheet_id,
-                        sheet_type: v.sheet_type,
-                        sheet_number: v.sheet_number,
-                        sheet_title: v.sheet_title,
-                        last_name: v.last_name,
-                        first_name: v.first_name,
-                        has_subject: v.has_subject,
-                        context_well_formulated: v.context_well_formulated,
-                        objectives_validated: v.objectives_validated,
-                        session_grade: v.session_grade,
-                        comments: v.comments,
-                      })}
-                    >
-                      Valider
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filterRows(inProgress).length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: '#7f8c8d', padding: 16 }}>Aucune fiche en cours</td></tr>
-              )}
-            </tbody>
-          </table>
+          {(() => {
+            const rows = filterRows(inProgress);
+            const totalPages = Math.max(1, Math.ceil(rows.length / ipPageSize));
+            const safePage = Math.min(ipPage, totalPages);
+            const paginated = rows.slice((safePage - 1) * ipPageSize, safePage * ipPageSize);
+            return (
+              <>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Étudiant</th>
+                      <th>Fiche</th>
+                      <th>Type</th>
+                      <th>Soumise le</th>
+                      <th>Délai</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((v) => (
+                      <tr key={v.id}>
+                        <td><strong>{v.last_name} {v.first_name}</strong></td>
+                        <td>{v.sheet_title || `${v.sheet_type} ${v.sheet_number}`}</td>
+                        <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type}</span></td>
+                        <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
+                        <td>
+                          {(() => {
+                            const b = delayBadge(v.days_since_validation);
+                            return <span className="badge" style={{ ...b.style, padding: '3px 10px' }}>{b.label}</span>;
+                          })()}
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => setShowValidation({
+                              activity_sheet_id: v.activity_sheet_id,
+                              sheet_type: v.sheet_type,
+                              sheet_number: v.sheet_number,
+                              sheet_title: v.sheet_title,
+                              last_name: v.last_name,
+                              first_name: v.first_name,
+                              has_subject: v.has_subject,
+                              context_well_formulated: v.context_well_formulated,
+                              objectives_validated: v.objectives_validated,
+                              session_grade: v.session_grade,
+                              comments: v.comments,
+                            })}
+                          >
+                            Valider
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', color: '#7f8c8d', padding: 16 }}>Aucune fiche en cours</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                {rows.length > 10 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', marginTop: 12 }}>
+                    <button onClick={() => setIpPage((p) => Math.max(1, p - 1))} disabled={safePage === 1} className="btn btn-outline" style={{ padding: '4px 10px' }}>‹</button>
+                    <span style={{ fontSize: '0.85rem' }}>{safePage} / {totalPages}</span>
+                    <button onClick={() => setIpPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} className="btn btn-outline" style={{ padding: '4px 10px' }}>›</button>
+                    <select value={ipPageSize} onChange={(e) => { setIpPageSize(Number(e.target.value)); setIpPage(1); }} style={{ fontSize: '0.82rem', padding: '4px 8px' }}>
+                      {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n} / page</option>)}
+                    </select>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 

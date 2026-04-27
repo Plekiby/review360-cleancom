@@ -7,12 +7,66 @@ import { requireAuth } from '../middleware/auth.js';
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-// GET /api/students/:id/dashboard — stats d'un étudiant
+// POST /api/students — créer un étudiant manuellement + ses 9 fiches
+router.post('/', requireAuth, async (req, res, next) => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const { student_number, first_name, last_name, email, class_id } = req.body;
+    if (!student_number || !first_name || !last_name || !class_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'student_number, first_name, last_name et class_id sont requis' });
+    }
+
+    const classCheck = await client.query(
+      'SELECT id FROM classes WHERE id = $1 AND school_id = $2 AND is_active = true',
+      [class_id, req.user.school_id]
+    );
+    if (!classCheck.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Classe introuvable' });
+    }
+
+    const studentResult = await client.query(
+      `INSERT INTO students (school_id, class_id, student_number, first_name, last_name, email)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [req.user.school_id, class_id, student_number.trim(), first_name.trim(), last_name.trim(), email?.trim().toLowerCase() || null]
+    );
+    const studentId = studentResult.rows[0].id;
+
+    for (let n = 1; n <= 5; n++) {
+      await client.query(
+        `INSERT INTO activity_sheets (student_id, sheet_type, sheet_number) VALUES ($1, 'ADOC', $2) ON CONFLICT DO NOTHING`,
+        [studentId, n]
+      );
+    }
+    for (let n = 1; n <= 4; n++) {
+      await client.query(
+        `INSERT INTO activity_sheets (student_id, sheet_type, sheet_number) VALUES ($1, 'DRCV', $2) ON CONFLICT DO NOTHING`,
+        [studentId, n]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json(studentResult.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (err.code === '23505') return res.status(409).json({ error: 'Ce numéro étudiant existe déjà dans cette école' });
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/students/:id/dashboard — stats d'un étudiant (scopé à l'école)
 router.get('/:id/dashboard', requireAuth, async (req, res, next) => {
   try {
     const result = await query(
-      'SELECT * FROM student_progress WHERE id = $1',
-      [req.params.id]
+      `SELECT sp.* FROM student_progress sp
+       JOIN students s ON sp.id = s.id
+       JOIN classes c ON s.class_id = c.id
+       WHERE sp.id = $1 AND c.school_id = $2`,
+      [req.params.id, req.user.school_id]
     );
     if (!result.rows[0]) return res.status(404).json({ error: 'Étudiant introuvable' });
     res.json(result.rows[0]);
@@ -102,6 +156,39 @@ router.patch('/activity-sheets/:id', requireAuth, async (req, res, next) => {
     if (!result.rows[0]) return res.status(404).json({ error: 'Fiche introuvable ou accès refusé' });
     res.json(result.rows[0]);
   } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/students/:id — modifier ou désactiver un étudiant (scopé à l'école)
+router.patch('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { first_name, last_name, email, student_number, is_active } = req.body;
+
+    const result = await query(
+      `UPDATE students
+       SET first_name      = COALESCE($1, first_name),
+           last_name       = COALESCE($2, last_name),
+           email           = COALESCE($3, email),
+           student_number  = COALESCE($4, student_number),
+           is_active       = COALESCE($5, is_active)
+       FROM classes c
+       WHERE students.id = $6 AND students.class_id = c.id AND c.school_id = $7
+       RETURNING students.*`,
+      [
+        first_name ? first_name.trim() : null,
+        last_name ? last_name.trim() : null,
+        email ? email.trim().toLowerCase() : null,
+        student_number ? student_number.trim() : null,
+        is_active !== undefined ? is_active : null,
+        req.params.id,
+        req.user.school_id,
+      ]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Étudiant introuvable ou accès refusé' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Ce numéro étudiant existe déjà' });
     next(err);
   }
 });

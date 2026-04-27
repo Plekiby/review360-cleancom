@@ -1,0 +1,12 @@
+RewriteEngine On
+
+# Proxy API vers le backend Node.js (port 3001 en staging)
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^api/(.*)$ http://127.0.0.1:3001/api/$1 [P,L,QSA]
+
+# SPA routing — tout le reste vers index.html
+RewriteBase /
+RewriteRule ^index\.html$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]

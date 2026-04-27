@@ -5,6 +5,7 @@ import TeacherGrades from './TeacherGrades';
 import AdminMonitoring from './AdminMonitoring';
 import AdminClassDetail from './AdminClassDetail';
 import AdminReports from './AdminReports';
+import AdminTeachers from './AdminTeachers';
 
 const TEACHER_TABS = [
   { id: 'students', label: '📋 Suivi Étudiants' },
@@ -16,6 +17,7 @@ const ADMIN_TABS = [
   { id: 'monitoring', label: '📊 Monitoring' },
   { id: 'classes', label: '🔍 Détail Classes' },
   { id: 'reports', label: '📈 Rapports' },
+  { id: 'management', label: '👥 Gestion' },
 ];
 
 export default function MainLayout({ user, onLogout }) {
@@ -93,6 +95,7 @@ export default function MainLayout({ user, onLogout }) {
         {isAdmin  && activeTab === 'monitoring'  && <AdminMonitoring user={user} onClassClick={goToClass} />}
         {isAdmin  && activeTab === 'classes'     && <AdminClassDetail user={user} initialClassId={pendingClassId} onConsumeInitial={() => setPendingClassId(null)} />}
         {isAdmin  && activeTab === 'reports'     && <AdminReports user={user} />}
+        {isAdmin  && activeTab === 'management'  && <AdminTeachers user={user} />}
       </div>
     </>
   );

@@ -10,6 +10,7 @@ import sessionsRoutes from './routes/sessions.js';
 import validationsRoutes from './routes/validations.js';
 import dashboardRoutes from './routes/dashboard.js';
 import alertsRoutes from './routes/alerts.js';
+import usersRoutes from './routes/users.js';
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ app.use('/api/sessions', sessionsRoutes);
 app.use('/api/validations', validationsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/alerts', alertsRoutes);
+app.use('/api/users', usersRoutes);
 
 app.use((err, req, res, next) => {
   console.error(`[ERROR] ${err.message}`);

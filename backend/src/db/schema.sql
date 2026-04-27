@@ -7,7 +7,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ========== SCHOOLS (Multi-tenant) ==========
-CREATE TABLE schools (
+CREATE TABLE IF NOT EXISTS schools (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(255) NOT NULL,
   siret VARCHAR(14),
@@ -19,7 +19,7 @@ CREATE TABLE schools (
 );
 
 -- ========== USERS (Enseignants, Admins) ==========
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   email VARCHAR(255) NOT NULL,
@@ -33,27 +33,27 @@ CREATE TABLE users (
   UNIQUE(school_id, email)
 );
 
-CREATE INDEX idx_users_school ON users(school_id);
-CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- ========== CLASSES ==========
-CREATE TABLE classes (
+CREATE TABLE IF NOT EXISTS classes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   name VARCHAR(50) NOT NULL, -- MCO1A, MCO2B, etc.
-  year SMALLINT NOT NULL CHECK (year IN (1, 2)), -- 1ère ou 2ème année
+  year SMALLINT CHECK (year IN (1, 2)), -- 1ère ou 2ème année (optionnel)
   teacher_id UUID REFERENCES users(id) ON DELETE SET NULL, -- Enseignant responsable
-  academic_year VARCHAR(9) NOT NULL, -- 2024-2025
+  academic_year VARCHAR(9), -- 2024-2025 (optionnel)
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(school_id, name, academic_year)
 );
 
-CREATE INDEX idx_classes_school ON classes(school_id);
-CREATE INDEX idx_classes_teacher ON classes(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_classes_school ON classes(school_id);
+CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes(teacher_id);
 
 -- ========== STUDENTS ==========
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
@@ -66,47 +66,47 @@ CREATE TABLE students (
   UNIQUE(school_id, student_number)
 );
 
-CREATE INDEX idx_students_class ON students(class_id);
-CREATE INDEX idx_students_school ON students(school_id);
+CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
+CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
 
 -- ========== ACTIVITY SHEETS (Fiches ADOC & DRCV) ==========
-CREATE TABLE activity_sheets (
+CREATE TABLE IF NOT EXISTS activity_sheets (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   sheet_type VARCHAR(10) NOT NULL CHECK (sheet_type IN ('ADOC', 'DRCV')), -- Type de fiche
   sheet_number SMALLINT NOT NULL, -- 1-5 pour ADOC, 1-4 pour DRCV
-  
+
   -- Contenu de la fiche
   title VARCHAR(255),
   context TEXT,
   objectives TEXT,
   methodology TEXT,
-  
+
   -- Validation
-  status VARCHAR(50) NOT NULL DEFAULT 'not_started' 
+  status VARCHAR(50) NOT NULL DEFAULT 'not_started'
     CHECK (status IN ('not_started', 'in_progress', 'completed', 'validated')),
   final_grade DECIMAL(3, 1), -- Note finale /10
-  
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(student_id, sheet_type, sheet_number)
 );
 
-CREATE INDEX idx_activity_sheets_student ON activity_sheets(student_id);
-CREATE INDEX idx_activity_sheets_status ON activity_sheets(status);
+CREATE INDEX IF NOT EXISTS idx_activity_sheets_student ON activity_sheets(student_id);
+CREATE INDEX IF NOT EXISTS idx_activity_sheets_status ON activity_sheets(status);
 
 -- ========== FOLLOW-UP SESSIONS (Sessions de suivi) ==========
-CREATE TABLE follow_up_sessions (
+CREATE TABLE IF NOT EXISTS follow_up_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   activity_sheet_id UUID NOT NULL REFERENCES activity_sheets(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
-  
+
   session_date DATE NOT NULL,
   session_time TIME,
   location VARCHAR(255),
   objective TEXT,
-  
+
   status VARCHAR(50) NOT NULL DEFAULT 'scheduled'
     CHECK (status IN ('scheduled', 'completed', 'cancelled', 'rescheduled')),
 
@@ -114,103 +114,103 @@ CREATE TABLE follow_up_sessions (
 
   -- Intégration Google Calendar (optionnel)
   google_calendar_event_id VARCHAR(255),
-  
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_sessions_student ON follow_up_sessions(student_id);
-CREATE INDEX idx_sessions_teacher ON follow_up_sessions(teacher_id);
-CREATE INDEX idx_sessions_date ON follow_up_sessions(session_date);
-CREATE INDEX idx_sessions_activity ON follow_up_sessions(activity_sheet_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_student ON follow_up_sessions(student_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_teacher ON follow_up_sessions(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_date ON follow_up_sessions(session_date);
+CREATE INDEX IF NOT EXISTS idx_sessions_activity ON follow_up_sessions(activity_sheet_id);
 
 -- ========== VALIDATIONS (Points de validation) ==========
-CREATE TABLE validations (
+CREATE TABLE IF NOT EXISTS validations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   session_id UUID NOT NULL REFERENCES follow_up_sessions(id) ON DELETE CASCADE,
   activity_sheet_id UUID NOT NULL REFERENCES activity_sheets(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
-  
+
   -- 3 points de contrôle critiques
   has_subject BOOLEAN,
   context_well_formulated BOOLEAN,
   objectives_validated BOOLEAN,
-  
+
   -- Optionnel
   methodology_respected BOOLEAN DEFAULT NULL,
-  
+
   -- Notes et commentaires
   session_grade DECIMAL(3, 1), -- Note session /10
   comments TEXT,
-  
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_validations_sheet ON validations(activity_sheet_id);
-CREATE INDEX idx_validations_session ON validations(session_id);
-CREATE INDEX idx_validations_teacher ON validations(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_validations_sheet ON validations(activity_sheet_id);
+CREATE INDEX IF NOT EXISTS idx_validations_session ON validations(session_id);
+CREATE INDEX IF NOT EXISTS idx_validations_teacher ON validations(teacher_id);
 
 -- ========== ALERTS (Système d'alertes) ==========
-CREATE TABLE alerts (
+CREATE TABLE IF NOT EXISTS alerts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   activity_sheet_id UUID REFERENCES activity_sheets(id) ON DELETE CASCADE,
-  
+
   alert_type VARCHAR(50) NOT NULL CHECK (alert_type IN ('VERT', 'ORANGE', 'ROUGE')),
   reason TEXT NOT NULL, -- "Retard contexte", "Pas de sujet", etc.
-  
+
   is_resolved BOOLEAN DEFAULT false,
   resolved_at TIMESTAMP,
-  
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_alerts_student ON alerts(student_id);
-CREATE INDEX idx_alerts_type ON alerts(alert_type);
-CREATE INDEX idx_alerts_resolved ON alerts(is_resolved);
+CREATE INDEX IF NOT EXISTS idx_alerts_student ON alerts(student_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_type ON alerts(alert_type);
+CREATE INDEX IF NOT EXISTS idx_alerts_resolved ON alerts(is_resolved);
 
 -- ========== IMPORT LOGS (Historique des imports Excel) ==========
-CREATE TABLE import_logs (
+CREATE TABLE IF NOT EXISTS import_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
-  
+
   filename VARCHAR(255),
   imported_count SMALLINT DEFAULT 0,
   error_count SMALLINT DEFAULT 0,
   error_details TEXT, -- JSON avec détails erreurs
-  
+
   imported_by UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_import_logs_school ON import_logs(school_id);
-CREATE INDEX idx_import_logs_created ON import_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_import_logs_school ON import_logs(school_id);
+CREATE INDEX IF NOT EXISTS idx_import_logs_created ON import_logs(created_at);
 
 -- ========== AUDIT LOG (Historique des actions) ==========
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  
+
   action VARCHAR(100) NOT NULL, -- 'CREATE_VALIDATION', 'UPDATE_SESSION', 'IMPORT_STUDENTS', etc.
   resource_type VARCHAR(50), -- 'student', 'validation', 'session'
   resource_id UUID,
-  
+
   changes JSONB, -- {before: {...}, after: {...}}
   ip_address INET,
-  
+
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_audit_logs_school ON audit_logs(school_id);
-CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_school ON audit_logs(school_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 
 -- ========== VUE : Progression étudiant ==========
-CREATE VIEW student_progress AS
+CREATE OR REPLACE VIEW student_progress AS
 SELECT
   s.id,
   s.first_name,
@@ -230,7 +230,7 @@ LEFT JOIN alerts al ON s.id = al.student_id
 GROUP BY s.id, c.id;
 
 -- ========== VUE : Dashboard formateur ==========
-CREATE VIEW teacher_dashboard AS
+CREATE OR REPLACE VIEW teacher_dashboard AS
 SELECT
   c.id as class_id,
   c.name as class_name,

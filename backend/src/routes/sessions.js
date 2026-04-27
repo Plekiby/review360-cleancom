@@ -107,16 +107,19 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
       }
     }
 
+    // SET dynamique — notes accepte null explicite pour effacer, les autres COALESCE pour ignorer
+    const setClauses = ['updated_at = NOW()'];
+    const params = [];
+
+    if (status !== undefined) { params.push(status || null); setClauses.push(`status = COALESCE($${params.length}, status)`); }
+    if (location !== undefined) { params.push(location || null); setClauses.push(`location = COALESCE($${params.length}, location)`); }
+    if (objective !== undefined) { params.push(objective || null); setClauses.push(`objective = COALESCE($${params.length}, objective)`); }
+    if ('notes' in req.body) { params.push(req.body.notes || null); setClauses.push(`notes = $${params.length}`); }
+
+    params.push(req.params.id);
     const result = await query(
-      `UPDATE follow_up_sessions
-       SET status = COALESCE($1, status),
-           location = COALESCE($2, location),
-           objective = COALESCE($3, objective),
-           notes = COALESCE($4, notes),
-           updated_at = NOW()
-       WHERE id = $5
-       RETURNING *`,
-      [status || null, location || null, objective || null, notes !== undefined ? notes : null, req.params.id]
+      `UPDATE follow_up_sessions SET ${setClauses.join(', ')} WHERE id = $${params.length} RETURNING *`,
+      params
     );
     res.json(result.rows[0]);
   } catch (err) {

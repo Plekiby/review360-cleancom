@@ -60,6 +60,34 @@ router.post('/', requireAdmin, async (req, res, next) => {
   }
 });
 
+// PATCH /api/classes/:id — modifier nom, formateur, année, désactiver (admin only)
+router.patch('/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const { name, academic_year, is_active } = req.body;
+    const teacherIdProvided = 'teacher_id' in req.body;
+
+    const setClauses = [];
+    const params = [];
+
+    if (name !== undefined) { params.push(name); setClauses.push(`name = COALESCE($${params.length}, name)`); }
+    if (academic_year !== undefined) { params.push(academic_year || null); setClauses.push(`academic_year = $${params.length}`); }
+    if (teacherIdProvided) { params.push(req.body.teacher_id); setClauses.push(`teacher_id = $${params.length}`); }
+    if (is_active !== undefined) { params.push(is_active); setClauses.push(`is_active = $${params.length}`); }
+
+    if (setClauses.length === 0) return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
+
+    params.push(req.params.id, req.user.school_id);
+    const result = await query(
+      `UPDATE classes SET ${setClauses.join(', ')} WHERE id = $${params.length - 1} AND school_id = $${params.length} RETURNING *`,
+      params
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Classe introuvable' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/classes/:id/students — étudiants avec stats via vue student_progress
 router.get('/:id/students', requireAuth, async (req, res, next) => {
   try {

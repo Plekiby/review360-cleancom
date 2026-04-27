@@ -24,9 +24,15 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
+  const [showCreateClass, setShowCreateClass] = useState(false);
+  const [editClassModal, setEditClassModal] = useState(false);
+  const [createStudentModal, setCreateStudentModal] = useState(false);
+  const [editStudentModal, setEditStudentModal] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [escaladeStudent, setEscaladeStudent] = useState(null);
   const [convoquerStudent, setConvoquerStudent] = useState(null);
+  const [showAllStudents, setShowAllStudents] = useState(false);
+  const [atRiskPage, setAtRiskPage] = useState(1);
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -60,6 +66,28 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
 
   const refreshStudents = () => {
     if (selectedClass) api.getClassStudents(selectedClass).then(setStudents);
+  };
+
+  const deactivateClass = async () => {
+    if (!window.confirm(`Désactiver la classe "${currentClass?.name}" ? Elle disparaîtra des listes. Les étudiants et fiches sont conservés.`)) return;
+    try {
+      await api.updateClass(selectedClass, { is_active: false });
+      const updated = classes.filter((c) => c.id !== selectedClass);
+      setClasses(updated);
+      setSelectedClass(updated[0]?.id || null);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const deactivateStudent = async (student) => {
+    if (!window.confirm(`Désactiver ${student.last_name} ${student.first_name} ? Le compte sera masqué mais les données conservées.`)) return;
+    try {
+      await api.updateStudent(student.id, { is_active: false });
+      refreshStudents();
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   if (loading) return <div className="info-card">Chargement...</div>;
@@ -101,9 +129,17 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
           <span className="badge badge-success">{avgGrade}/10 moy.</span>
           <span className="badge badge-warning">{totalProgress}% progression</span>
           {atRisk.length > 0 && <span className="badge badge-danger">{atRisk.length} en alerte</span>}
-          <button className="btn btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setShowImport(true)}>
-            📥 Importer étudiants
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline" onClick={() => setShowCreateClass(true)}>+ Nouvelle classe</button>
+            {currentClass && (
+              <>
+                <button className="btn btn-outline" onClick={() => setEditClassModal(true)}>✏️ Modifier la classe</button>
+                <button className="btn btn-warning" style={{ fontSize: '0.85rem' }} onClick={deactivateClass}>Désactiver</button>
+              </>
+            )}
+            <button className="btn btn-success" onClick={() => setCreateStudentModal(true)}>+ Étudiant</button>
+            <button className="btn btn-primary" onClick={() => setShowImport(true)}>📥 Importer</button>
+          </div>
         </div>
       </div>
 
@@ -116,6 +152,17 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
             // l'utilisateur ferme lui-même via le bouton "Fermer".
             // On recharge simplement les étudiants en arrière-plan.
             api.getClassStudents(selectedClass).then(setStudents);
+          }}
+        />
+      )}
+
+      {showCreateClass && (
+        <CreateClassModal
+          onClose={() => setShowCreateClass(false)}
+          onCreated={(newClass) => {
+            setClasses((prev) => [...prev, newClass].sort((a, b) => a.name.localeCompare(b.name)));
+            setSelectedClass(newClass.id);
+            setShowCreateClass(false);
           }}
         />
       )}
@@ -155,45 +202,51 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
         <div className="info-card">
           <h3>⚠️ Étudiants en difficulté</h3>
           <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Étudiant</th>
-                  <th>Moyenne</th>
-                  <th>ADOC</th>
-                  <th>DRCV</th>
-                  <th>Dernier suivi</th>
-                  <th>Problème</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {atRisk.map((s) => {
-                  const grade = parseFloat(s.average_grade);
-                  const isCritical = s.critical_alerts > 0;
-                  return (
-                    <tr key={s.id} className={isCritical ? 'urgent' : 'warn'}>
-                      <td><strong>{s.last_name} {s.first_name}</strong></td>
-                      <td className={gradeClass(grade)}>{isNaN(grade) ? '—' : `${grade.toFixed(1)}/10`}</td>
-                      <td>{s.adoc_validated ?? 0}/5</td>
-                      <td>{s.drcv_validated ?? 0}/4</td>
-                      <td style={{ fontSize: '0.8rem' }}>{s.last_session_date ? new Date(s.last_session_date).toLocaleDateString('fr-FR') : '—'}</td>
-                      <td>
-                        {isCritical
-                          ? <span className="badge badge-danger">Alerte critique</span>
-                          : <span className="badge badge-warning">Note insuffisante</span>}
-                      </td>
-                      <td>
-                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setConvoquerStudent(s)}>Convoquer</button>
-                        <button className="btn btn-warning" onClick={() => setEscaladeStudent(s)}>
-                          Escalader
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            {(() => {
+              const PAGE = 10;
+              const total = Math.max(1, Math.ceil(atRisk.length / PAGE));
+              const safe = Math.min(atRiskPage, total);
+              const rows = atRisk.slice((safe - 1) * PAGE, safe * PAGE);
+              return (
+                <>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Étudiant</th><th>Moyenne</th><th>ADOC</th><th>DRCV</th>
+                        <th>Dernier suivi</th><th>Problème</th><th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((s) => {
+                        const grade = parseFloat(s.average_grade);
+                        const isCritical = s.critical_alerts > 0;
+                        return (
+                          <tr key={s.id} className={isCritical ? 'urgent' : 'warn'}>
+                            <td><strong>{s.last_name} {s.first_name}</strong></td>
+                            <td className={gradeClass(grade)}>{isNaN(grade) ? '—' : `${grade.toFixed(1)}/10`}</td>
+                            <td>{s.adoc_validated ?? 0}/5</td>
+                            <td>{s.drcv_validated ?? 0}/4</td>
+                            <td style={{ fontSize: '0.8rem' }}>{s.last_session_date ? new Date(s.last_session_date).toLocaleDateString('fr-FR') : '—'}</td>
+                            <td>{isCritical ? <span className="badge badge-danger">Alerte critique</span> : <span className="badge badge-warning">Note insuffisante</span>}</td>
+                            <td>
+                              <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setConvoquerStudent(s)}>Convoquer</button>
+                              <button className="btn btn-warning" onClick={() => setEscaladeStudent(s)}>Escalader</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {atRisk.length > PAGE && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end', marginTop: 10 }}>
+                      <button onClick={() => setAtRiskPage((p) => Math.max(1, p - 1))} disabled={safe === 1} className="btn btn-outline" style={{ padding: '4px 10px' }}>‹</button>
+                      <span style={{ fontSize: '0.85rem' }}>{safe} / {total}</span>
+                      <button onClick={() => setAtRiskPage((p) => Math.min(total, p + 1))} disabled={safe === total} className="btn btn-outline" style={{ padding: '4px 10px' }}>›</button>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -229,6 +282,63 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
         </div>
       )}
 
+      {/* Liste complète des étudiants */}
+      <div className="info-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <h3 style={{ margin: 0 }}>👤 Tous les étudiants ({students.length})</h3>
+          <button
+            className="btn btn-outline"
+            style={{ fontSize: '0.82rem' }}
+            onClick={() => setShowAllStudents((v) => !v)}
+          >
+            {showAllStudents ? 'Masquer' : 'Afficher'}
+          </button>
+        </div>
+        {showAllStudents && (() => {
+          const PAGE = 15;
+          return (
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>N° étudiant</th>
+                    <th>Nom</th>
+                    <th>Moyenne</th>
+                    <th>ADOC</th>
+                    <th>DRCV</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((s) => {
+                    const grade = parseFloat(s.average_grade);
+                    return (
+                      <tr key={s.id}>
+                        <td style={{ fontSize: '0.82rem', color: '#7f8c8d' }}>{s.student_number}</td>
+                        <td><strong>{s.last_name} {s.first_name}</strong></td>
+                        <td className={isNaN(grade) ? '' : gradeClass(grade)}>{isNaN(grade) ? '—' : `${grade.toFixed(1)}/10`}</td>
+                        <td>{s.adoc_validated ?? 0}/5</td>
+                        <td>{s.drcv_validated ?? 0}/4</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-primary" style={{ fontSize: '0.78rem', padding: '3px 8px' }} onClick={() => setSelectedStudent(s)}>Voir</button>
+                            <button className="btn btn-outline" style={{ fontSize: '0.78rem', padding: '3px 8px' }} onClick={() => setEditStudentModal(s)}>Modifier</button>
+                            <button className="btn btn-warning" style={{ fontSize: '0.78rem', padding: '3px 8px' }} onClick={() => deactivateStudent(s)}>Désactiver</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {students.length === 0 && (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', color: '#7f8c8d', padding: 16 }}>Aucun étudiant dans cette classe</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
+      </div>
+
       {/* Recommandations */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div className="info-card" style={{ borderTop: '3px solid #f39c12' }}>
@@ -256,6 +366,36 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
         />
       )}
 
+      {editClassModal && currentClass && (
+        <EditClassModal
+          cls={currentClass}
+          onClose={() => setEditClassModal(false)}
+          onSaved={(updated) => {
+            setClasses((prev) => prev.map((c) => c.id === updated.id ? { ...c, ...updated } : c));
+            setEditClassModal(false);
+          }}
+        />
+      )}
+
+      {createStudentModal && selectedClass && (
+        <StudentFormModal
+          classId={selectedClass}
+          classes={classes}
+          onClose={() => setCreateStudentModal(false)}
+          onSaved={() => { setCreateStudentModal(false); refreshStudents(); }}
+        />
+      )}
+
+      {editStudentModal && (
+        <StudentFormModal
+          student={editStudentModal}
+          classId={selectedClass}
+          classes={classes}
+          onClose={() => setEditStudentModal(null)}
+          onSaved={() => { setEditStudentModal(null); refreshStudents(); }}
+        />
+      )}
+
       {convoquerStudent && (
         <ConvoquerForm
           student={convoquerStudent}
@@ -274,6 +414,276 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
     </>
   );
 }
+
+function EditClassModal({ cls, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name: cls.name || '',
+    academic_year: cls.academic_year || '',
+    teacher_id: cls.teacher_id || '',
+  });
+  const [teachers, setTeachers] = useState([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.getUsers({ role: 'teacher' }).then(setTeachers).catch(() => {});
+  }, []);
+
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.name.trim()) { setError('Le nom est requis.'); return; }
+    setLoading(true);
+    try {
+      const updated = await api.updateClass(cls.id, {
+        name: form.name.trim(),
+        academic_year: form.academic_year.trim() || null,
+        teacher_id: form.teacher_id || null,
+      });
+      onSaved(updated);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={ccOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={ccModal}>
+        <div style={ccHeader}>
+          <span style={{ fontWeight: 700 }}>Modifier la classe</span>
+          <button onClick={onClose} style={ccCloseBtn}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ padding: 24 }}>
+          <div className="form-group">
+            <label>Nom de la classe *</label>
+            <input type="text" value={form.name} onChange={set('name')} required autoFocus />
+          </div>
+          <div className="form-group">
+            <label>Année scolaire <span style={{ color: '#aaa', fontWeight: 400 }}>(optionnel)</span></label>
+            <input type="text" value={form.academic_year} onChange={set('academic_year')} placeholder="ex: 2024-2025" />
+          </div>
+          <div className="form-group">
+            <label>Formateur référent <span style={{ color: '#aaa', fontWeight: 400 }}>(optionnel)</span></label>
+            <select value={form.teacher_id} onChange={set('teacher_id')}>
+              <option value="">— Aucun assigné —</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>{t.last_name} {t.first_name}</option>
+              ))}
+            </select>
+          </div>
+          {error && <div className="alert-banner danger" style={{ marginBottom: 12 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={onClose}>Annuler</button>
+            <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
+              {loading ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StudentFormModal({ student, classId, classes, onClose, onSaved }) {
+  const isEdit = !!student;
+  const [form, setForm] = useState({
+    student_number: student?.student_number || '',
+    first_name: student?.first_name || '',
+    last_name: student?.last_name || '',
+    email: student?.email || '',
+    class_id: classId || '',
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      if (isEdit) {
+        await api.updateStudent(student.id, {
+          student_number: form.student_number,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          email: form.email || null,
+        });
+      } else {
+        await api.createStudent({
+          student_number: form.student_number,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          email: form.email || null,
+          class_id: form.class_id,
+        });
+      }
+      onSaved();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={ccOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={ccModal}>
+        <div style={ccHeader}>
+          <span style={{ fontWeight: 700 }}>{isEdit ? 'Modifier l\'étudiant' : 'Ajouter un étudiant'}</span>
+          <button onClick={onClose} style={ccCloseBtn}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ padding: 24 }}>
+          <div className="form-group">
+            <label>N° étudiant *</label>
+            <input type="text" value={form.student_number} onChange={set('student_number')} required autoFocus={!isEdit} />
+          </div>
+          <div className="form-group">
+            <label>Prénom *</label>
+            <input type="text" value={form.first_name} onChange={set('first_name')} required />
+          </div>
+          <div className="form-group">
+            <label>Nom *</label>
+            <input type="text" value={form.last_name} onChange={set('last_name')} required />
+          </div>
+          <div className="form-group">
+            <label>Email <span style={{ color: '#aaa', fontWeight: 400 }}>(optionnel)</span></label>
+            <input type="email" value={form.email} onChange={set('email')} />
+          </div>
+          {!isEdit && (
+            <div className="form-group">
+              <label>Classe *</label>
+              <select value={form.class_id} onChange={set('class_id')} required>
+                {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          {error && <div className="alert-banner danger" style={{ marginBottom: 12 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={onClose}>Annuler</button>
+            <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
+              {loading ? 'Enregistrement...' : isEdit ? 'Enregistrer' : 'Ajouter'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CreateClassModal({ onClose, onCreated }) {
+  const [form, setForm] = useState({ name: '', academic_year: '', teacher_id: '' });
+  const [teachers, setTeachers] = useState([]);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.getUsers({ role: 'teacher' }).then(setTeachers).catch(() => {});
+  }, []);
+
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.name.trim()) { setError('Le nom de la classe est requis.'); return; }
+    setLoading(true);
+    try {
+      const cls = await api.createClass({
+        name: form.name.trim(),
+        academic_year: form.academic_year.trim() || null,
+        teacher_id: form.teacher_id || null,
+      });
+      onCreated(cls);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={ccOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={ccModal}>
+        <div style={ccHeader}>
+          <span style={{ fontWeight: 700 }}>Nouvelle classe</span>
+          <button onClick={onClose} style={ccCloseBtn}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ padding: 24 }}>
+          <div className="form-group">
+            <label>Nom de la classe *</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={set('name')}
+              placeholder="ex: BTS MCO 1A"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="form-group">
+            <label>
+              Année scolaire{' '}
+              <span style={{ color: '#aaa', fontWeight: 400 }}>(optionnel)</span>
+            </label>
+            <input
+              type="text"
+              value={form.academic_year}
+              onChange={set('academic_year')}
+              placeholder="ex: 2024-2025"
+            />
+          </div>
+          <div className="form-group">
+            <label>
+              Formateur référent{' '}
+              <span style={{ color: '#aaa', fontWeight: 400 }}>(optionnel)</span>
+            </label>
+            <select value={form.teacher_id} onChange={set('teacher_id')}>
+              <option value="">— Aucun assigné —</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>{t.last_name} {t.first_name}</option>
+              ))}
+            </select>
+          </div>
+          {error && <div className="alert-banner danger" style={{ marginBottom: 12 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={onClose}>
+              Annuler
+            </button>
+            <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={loading}>
+              {loading ? 'Création...' : 'Créer la classe'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const ccOverlay = {
+  position: 'fixed', inset: 0,
+  background: 'rgba(0,0,0,0.5)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  zIndex: 1200, padding: 16,
+};
+const ccModal = {
+  background: 'white', borderRadius: 10,
+  width: '100%', maxWidth: 440,
+  boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+  overflow: 'hidden',
+};
+const ccHeader = {
+  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  padding: '14px 20px',
+  background: 'linear-gradient(135deg, #2c3e50 0%, #34495e 100%)',
+  color: 'white',
+};
+const ccCloseBtn = { background: 'none', border: 'none', color: 'white', fontSize: '1.2rem', cursor: 'pointer' };
 
 function ConvoquerForm({ student, onClose, onSaved }) {
   const [sheets, setSheets] = useState(null);
