@@ -2,9 +2,21 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 
 const CHECKPOINTS = [
-  { key: 'has_subject',              label: 'Sujet clairement défini' },
-  { key: 'context_well_formulated',  label: 'Contexte bien formulé' },
-  { key: 'objectives_validated',     label: 'Objectifs validés' },
+  {
+    key: 'has_subject',
+    label: 'Sujet clairement défini',
+    help: 'L\'étudiant a nommé le sujet/produit/service traité, identifié l\'entreprise et son secteur d\'activité.',
+  },
+  {
+    key: 'context_well_formulated',
+    label: 'Contexte bien formulé',
+    help: 'Le contexte de la mission est posé : marché, enjeux, contraintes, parties prenantes.',
+  },
+  {
+    key: 'objectives_validated',
+    label: 'Objectifs validés',
+    help: 'Les objectifs sont SMART (spécifiques, mesurables, atteignables, réalistes, temporels) et alignés avec le sujet.',
+  },
 ];
 
 export default function ValidationForm({ validation, onClose, onSaved }) {
@@ -80,12 +92,17 @@ export default function ValidationForm({ validation, onClose, onSaved }) {
                   type="checkbox"
                   checked={checks[cp.key]}
                   onChange={() => toggle(cp.key)}
-                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#27ae60' }}
+                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#27ae60', marginTop: 2, flexShrink: 0 }}
                 />
-                <span style={{ fontSize: '0.9rem', fontWeight: checks[cp.key] ? 600 : 400 }}>
-                  {cp.label}
-                </span>
-                {checks[cp.key] && <span style={{ marginLeft: 'auto', color: '#27ae60' }}>✅</span>}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: checks[cp.key] ? 600 : 500, display: 'flex', alignItems: 'center' }}>
+                    {cp.label}
+                    {checks[cp.key] && <span style={{ marginLeft: 'auto', color: '#27ae60' }}>✅</span>}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#7f8c8d', marginTop: 3, lineHeight: 1.35 }}>
+                    {cp.help}
+                  </div>
+                </div>
               </label>
             ))}
           </div>
@@ -112,6 +129,16 @@ export default function ValidationForm({ validation, onClose, onSaved }) {
               placeholder="ex: 7.5"
               style={{ width: '100%', padding: '9px 12px', borderRadius: 4, border: '1px solid #e0e0e0', fontSize: '1rem' }}
             />
+            {grade !== '' && parseFloat(grade) >= 7 && checkedCount < 2 && (
+              <div style={{ fontSize: '0.78rem', color: '#c0392b', marginTop: 6, padding: '6px 10px', background: '#fff5f5', borderRadius: 4, border: '1px solid #f5c6cb' }}>
+                ⚠️ Note élevée ({grade}/10) avec seulement {checkedCount}/3 critère{checkedCount !== 1 ? 's' : ''} validé{checkedCount !== 1 ? 's' : ''}. Cohérence à vérifier.
+              </div>
+            )}
+            {grade !== '' && parseFloat(grade) < 4 && checkedCount === 3 && (
+              <div style={{ fontSize: '0.78rem', color: '#c0392b', marginTop: 6, padding: '6px 10px', background: '#fff5f5', borderRadius: 4, border: '1px solid #f5c6cb' }}>
+                ⚠️ Tous les critères validés mais note faible ({grade}/10). Cohérence à vérifier.
+              </div>
+            )}
           </div>
 
           {/* Commentaire */}
@@ -171,7 +198,7 @@ const closeBtn = {
   fontSize: '1.2rem', cursor: 'pointer', padding: '0 4px',
 };
 const checkboxRow = (checked) => ({
-  display: 'flex', alignItems: 'center', gap: 12,
+  display: 'flex', alignItems: 'flex-start', gap: 12,
   padding: '12px 14px', marginBottom: 8,
   borderRadius: 8, cursor: 'pointer',
   background: checked ? '#f0fdf4' : '#fafafa',

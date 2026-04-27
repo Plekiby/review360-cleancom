@@ -42,6 +42,12 @@ export default function MainLayout({ user, onLogout }) {
     setActiveTab('classes');
   };
 
+  const confirmLogout = () => {
+    if (window.confirm('Vous allez être déconnecté. Continuer ?')) {
+      onLogout();
+    }
+  };
+
   return (
     <>
       <header className="app-header">
@@ -61,7 +67,7 @@ export default function MainLayout({ user, onLogout }) {
           <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.82rem' }}>
             {user.first_name} {user.last_name}
           </span>
-          <button className="btn btn-outline" onClick={onLogout} style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }}>
+          <button className="btn btn-outline" onClick={confirmLogout} style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }}>
             Déconnexion
           </button>
         </div>

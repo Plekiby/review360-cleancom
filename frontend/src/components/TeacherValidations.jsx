@@ -2,6 +2,22 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import ValidationForm from './ValidationForm';
 
+// Gravité graduée selon le nombre de jours de retard.
+// Au-delà de 7j on entre en "urgent", puis on intensifie progressivement.
+function delayBadge(days) {
+  const d = Math.round(days || 0);
+  if (d >= 21) {
+    return { label: `${d} j`, style: { background: '#7b0e0e', color: 'white', fontWeight: 700 } };
+  }
+  if (d >= 14) {
+    return { label: `${d} j`, style: { background: '#c0392b', color: 'white' } };
+  }
+  if (d >= 7) {
+    return { label: `${d} j`, style: { background: '#e67e22', color: 'white' } };
+  }
+  return { label: `${d} j`, style: { background: '#f5b041', color: 'white' } };
+}
+
 export default function TeacherValidations() {
   const [urgent, setUrgent] = useState([]);
   const [inProgress, setInProgress] = useState([]);
@@ -104,8 +120,19 @@ export default function TeacherValidations() {
                   <td>{v.sheet_title || `${v.sheet_type} ${v.sheet_number}`}</td>
                   <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type}</span></td>
                   <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
-                  <td><span className="badge badge-danger">{Math.round(v.days_since_validation)} j</span></td>
-                  <td><span className="badge badge-danger">URGENT</span></td>
+                  <td>
+                    {(() => {
+                      const b = delayBadge(v.days_since_validation);
+                      return <span className="badge" style={{ ...b.style, padding: '3px 10px' }}>{b.label}</span>;
+                    })()}
+                  </td>
+                  <td>
+                    {Math.round(v.days_since_validation || 0) >= 21
+                      ? <span className="badge badge-danger" style={{ background: '#7b0e0e' }}>CRITIQUE</span>
+                      : Math.round(v.days_since_validation || 0) >= 14
+                        ? <span className="badge badge-danger">URGENT</span>
+                        : <span className="badge badge-warning">À TRAITER</span>}
+                  </td>
                   <td>
                     <button
                       className="btn btn-danger"
@@ -153,7 +180,12 @@ export default function TeacherValidations() {
                   <td>{v.sheet_title || `${v.sheet_type} ${v.sheet_number}`}</td>
                   <td><span className={`badge badge-${v.sheet_type === 'ADOC' ? 'info' : 'warning'}`}>{v.sheet_type}</span></td>
                   <td style={{ fontSize: '0.82rem' }}>{new Date(v.created_at).toLocaleDateString('fr-FR')}</td>
-                  <td>{Math.round(v.days_since_validation)} j</td>
+                  <td>
+                    {(() => {
+                      const b = delayBadge(v.days_since_validation);
+                      return <span className="badge" style={{ ...b.style, padding: '3px 10px' }}>{b.label}</span>;
+                    })()}
+                  </td>
                   <td>
                     <button
                       className="btn btn-primary"
