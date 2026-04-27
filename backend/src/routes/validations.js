@@ -37,16 +37,26 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const studentId = sheetCheck.rows[0].student_id;
 
-    // Si pas de session fournie → en créer une automatiquement (validation directe)
+    // Si pas de session fournie → réutiliser la dernière session completed, sinon créer une validation directe
     let session_id = providedSessionId;
     if (!session_id) {
-      const autoSession = await client.query(
-        `INSERT INTO follow_up_sessions (student_id, activity_sheet_id, teacher_id, session_date, objective, status)
-         VALUES ($1, $2, $3, CURRENT_DATE, 'Validation directe', 'completed')
-         RETURNING id`,
-        [studentId, activity_sheet_id, req.user.id]
+      const existing = await client.query(
+        `SELECT id FROM follow_up_sessions
+         WHERE activity_sheet_id = $1 AND status = 'completed'
+         ORDER BY session_date DESC LIMIT 1`,
+        [activity_sheet_id]
       );
-      session_id = autoSession.rows[0].id;
+      if (existing.rows[0]) {
+        session_id = existing.rows[0].id;
+      } else {
+        const autoSession = await client.query(
+          `INSERT INTO follow_up_sessions (student_id, activity_sheet_id, teacher_id, session_date, objective, status)
+           VALUES ($1, $2, $3, CURRENT_DATE, 'Validation directe', 'completed')
+           RETURNING id`,
+          [studentId, activity_sheet_id, req.user.id]
+        );
+        session_id = autoSession.rows[0].id;
+      }
     }
 
     // Créer la validation
