@@ -23,7 +23,7 @@ jobs:
           npm ci
           npm run build
         env:
-          VITE_API_URL: https://staging.suivi360.cleancom.fr/api
+          VITE_API_URL: https://staging.sc1juwa0721.universe.wf/api
 
       - name: Deploy backend via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -48,8 +48,8 @@ jobs:
           username: ${{ secrets.O2SWITCH_USER }}
           key: ${{ secrets.O2SWITCH_SSH_KEY }}
           script: |
-            rm -rf ~/staging.suivi360.cleancom.fr/*
-            mkdir -p ~/staging.suivi360.cleancom.fr
+            rm -rf ~/staging.sc1juwa0721.universe.wf/*
+            mkdir -p ~/staging.sc1juwa0721.universe.wf
 
       - name: Copy frontend build
         uses: appleboy/scp-action@v0.1.7
@@ -58,7 +58,7 @@ jobs:
           username: ${{ secrets.O2SWITCH_USER }}
           key: ${{ secrets.O2SWITCH_SSH_KEY }}
           source: 'frontend/dist/*'
-          target: '~/staging.suivi360.cleancom.fr/'
+          target: '~/staging.sc1juwa0721.universe.wf/'
           strip_components: 2
 
       - name: Copy .htaccess
@@ -68,13 +68,13 @@ jobs:
           username: ${{ secrets.O2SWITCH_USER }}
           key: ${{ secrets.O2SWITCH_SSH_KEY }}
           source: 'backend/.htaccess'
-          target: '~/staging.suivi360.cleancom.fr/'
+          target: '~/staging.sc1juwa0721.universe.wf/'
           strip_components: 1
 
       - name: Smoke test staging
         run: |
           sleep 15
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://staging.suivi360.cleancom.fr/health || echo "000")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://staging.sc1juwa0721.universe.wf/health || echo "000")
           if [ "$STATUS" != "200" ]; then
             echo "❌ Staging health check failed (HTTP $STATUS)"
             exit 1
