@@ -102,29 +102,44 @@ router.patch('/activity-sheets/:id', requireAuth, async (req, res, next) => {
   }
 });
 
+// Normalise un en-tête Excel : minuscules, sans accents, espaces → underscores
+function normalizeKey(h) {
+  return String(h || '').trim()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
 // Extraire et normaliser les lignes d'un buffer Excel
 async function parseExcelBuffer(buffer) {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
   const sheet = workbook.worksheets[0];
-  const headerRow = sheet.getRow(1).values.slice(1);
+  const rawHeaders = sheet.getRow(1).values.slice(1);
+  const normalizedHeaders = rawHeaders.map(normalizeKey);
   const rows = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const obj = {};
-    row.values.slice(1).forEach((val, i) => { obj[headerRow[i]] = val ?? ''; });
+    row.values.slice(1).forEach((val, i) => {
+      if (normalizedHeaders[i]) obj[normalizedHeaders[i]] = val ?? '';
+    });
     rows.push(obj);
   });
   return rows;
 }
 
 function normalizeRow(row, lineNumber) {
-  const studentNumber = String(row['Num'] || row['Numéro'] || row['Numero'] || '').trim();
-  const firstName = String(row['Prénom'] || row['Prenom'] || '').trim();
-  const lastName = String(row['Nom'] || '').trim();
-  const email = String(row['Email'] || '').trim().toLowerCase();
+  // Accepte : num, numero, num_etudiant, number, matricule
+  const studentNumber = String(row['num'] || row['numero'] || row['num_etudiant'] || row['number'] || row['matricule'] || '').trim();
+  // Accepte : prenom, firstname, first_name
+  const firstName = String(row['prenom'] || row['firstname'] || row['first_name'] || '').trim();
+  // Accepte : nom, lastname, last_name
+  const lastName = String(row['nom'] || row['lastname'] || row['last_name'] || '').trim();
+  // Accepte : email, mail, courriel
+  const email = String(row['email'] || row['mail'] || row['courriel'] || '').trim().toLowerCase();
   const valid = !!(studentNumber && firstName && lastName);
-  const error = valid ? null : `Ligne ${lineNumber}: Num, Nom et Prénom requis`;
+  const error = valid ? null : `Ligne ${lineNumber}: colonnes Num, Nom et Prénom requises (en-tête insensible à la casse et aux accents)`;
   return { studentNumber, firstName, lastName, email, valid, error };
 }
 

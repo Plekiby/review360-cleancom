@@ -21,6 +21,8 @@ function computeStatus(row) {
   return 'on_track';
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
 export default function TeacherStudents({ user }) {
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
@@ -28,6 +30,8 @@ export default function TeacherStudents({ user }) {
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -41,12 +45,18 @@ export default function TeacherStudents({ user }) {
 
   useEffect(() => {
     if (!selectedClass) return;
+    setPage(1);
     api.getClassStudents(selectedClass).then(setStudents);
   }, [selectedClass]);
+
+  useEffect(() => { setPage(1); }, [search]);
 
   const filtered = search
     ? students.filter((s) => `${s.last_name} ${s.first_name}`.toLowerCase().includes(search.toLowerCase()) || s.student_number?.includes(search))
     : students;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
   const urgent = students.filter((s) => s.critical_alerts > 0);
   const avgGrade = students.length
     ? (students.reduce((sum, s) => sum + (parseFloat(s.average_grade) || 0), 0) / students.length).toFixed(1)
@@ -128,7 +138,7 @@ export default function TeacherStudents({ user }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => {
+              {paginated.map((s) => {
                 const status = computeStatus(s);
                 const grade = parseFloat(s.average_grade);
                 return (
@@ -157,7 +167,7 @@ export default function TeacherStudents({ user }) {
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {paginated.length === 0 && (
                 <tr><td colSpan={7} style={{ textAlign: 'center', color: '#7f8c8d', padding: 24 }}>
                   {search ? `Aucun résultat pour "${search}"` : 'Aucun étudiant'}
                 </td></tr>
@@ -165,6 +175,18 @@ export default function TeacherStudents({ user }) {
             </tbody>
           </table>
         </div>
+        {filtered.length > PAGE_SIZE_OPTIONS[0] && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, fontSize: '0.84rem', color: '#7f8c8d', flexWrap: 'wrap', gap: 8 }}>
+            <span>{filtered.length} étudiant{filtered.length > 1 ? 's' : ''} · page {safePage}/{totalPages}</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button className="btn btn-outline" style={{ padding: '4px 10px' }} disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹</button>
+              <button className="btn btn-outline" style={{ padding: '4px 10px' }} disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>›</button>
+              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #e0e0e0', fontSize: '0.82rem' }}>
+                {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n} / page</option>)}
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedStudent && (

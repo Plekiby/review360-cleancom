@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import ImportStudents from './ImportStudents';
 import StudentDetail from './StudentDetail';
+import SessionForm from './SessionForm';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -25,6 +26,7 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
   const [showImport, setShowImport] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [escaladeStudent, setEscaladeStudent] = useState(null);
+  const [convoquerStudent, setConvoquerStudent] = useState(null);
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -180,7 +182,7 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
                           : <span className="badge badge-warning">Note insuffisante</span>}
                       </td>
                       <td>
-                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setSelectedStudent(s)}>Convoquer</button>
+                        <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setConvoquerStudent(s)}>Convoquer</button>
                         <button className="btn btn-warning" onClick={() => setEscaladeStudent(s)}>
                           Escalader
                         </button>
@@ -252,6 +254,14 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
         />
       )}
 
+      {convoquerStudent && (
+        <ConvoquerForm
+          student={convoquerStudent}
+          onClose={() => setConvoquerStudent(null)}
+          onSaved={() => { setConvoquerStudent(null); refreshStudents(); }}
+        />
+      )}
+
       {escaladeStudent && (
         <EscaladeForm
           student={escaladeStudent}
@@ -260,6 +270,41 @@ export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
         />
       )}
     </>
+  );
+}
+
+function ConvoquerForm({ student, onClose, onSaved }) {
+  const [sheets, setSheets] = useState(null);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    api.getActivitySheets(student.id)
+      .then((all) => setSheets(all.filter((s) => s.status !== 'validated')))
+      .catch(() => setLoadError('Impossible de charger les fiches de cet étudiant.'));
+  }, [student.id]);
+
+  if (loadError) return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 16 }}>
+      <div style={{ background: 'white', borderRadius: 10, padding: 24, maxWidth: 380 }}>
+        <p style={{ color: '#e74c3c', marginBottom: 16 }}>{loadError}</p>
+        <button className="btn btn-outline" onClick={onClose}>Fermer</button>
+      </div>
+    </div>
+  );
+
+  if (!sheets) return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+      <div style={{ background: 'white', borderRadius: 10, padding: 32, fontSize: '0.9rem', color: '#7f8c8d' }}>Chargement des fiches...</div>
+    </div>
+  );
+
+  return (
+    <SessionForm
+      student={student}
+      sheets={sheets}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
   );
 }
 

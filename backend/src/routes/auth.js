@@ -6,9 +6,30 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Rate limiting en mémoire — 5 tentatives / 15 min par IP
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
+
+function isRateLimited(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > MAX_ATTEMPTS;
+}
+
 // POST /api/auth/login
 router.post('/login', async (req, res, next) => {
   try {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    if (isRateLimited(ip)) {
+      return res.status(429).json({ error: 'Trop de tentatives. Réessayez dans 15 minutes.' });
+    }
+
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email et mot de passe requis' });
