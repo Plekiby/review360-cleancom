@@ -57,15 +57,18 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-// PATCH /api/alerts/:id — résoudre une alerte
+// PATCH /api/alerts/:id — résoudre une alerte (scope school)
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
     const result = await query(
-      `UPDATE alerts SET is_resolved = true, resolved_at = NOW(), updated_at = NOW()
-       WHERE id = $1 RETURNING *`,
-      [req.params.id]
+      `UPDATE alerts a SET is_resolved = true, resolved_at = NOW(), updated_at = NOW()
+       FROM students st
+       JOIN classes c ON st.class_id = c.id
+       WHERE a.id = $1 AND a.student_id = st.id AND c.school_id = $2
+       RETURNING a.*`,
+      [req.params.id, req.user.school_id]
     );
-    if (!result.rows[0]) return res.status(404).json({ error: 'Alerte introuvable' });
+    if (!result.rows[0]) return res.status(404).json({ error: 'Alerte introuvable ou accès refusé' });
     res.json(result.rows[0]);
   } catch (err) {
     next(err);

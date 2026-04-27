@@ -29,12 +29,12 @@ router.post('/', requireAuth, async (req, res, next) => {
   }
 });
 
-// GET /api/sessions?studentId=X — sessions d'un étudiant
+// GET /api/sessions?studentId=X — sessions d'un étudiant (scopé à l'école du user)
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     const { studentId, sheetId } = req.query;
-    const conditions = [];
-    const params = [];
+    const conditions = ['c.school_id = $1'];
+    const params = [req.user.school_id];
 
     if (studentId) {
       params.push(studentId);
@@ -45,15 +45,15 @@ router.get('/', requireAuth, async (req, res, next) => {
       conditions.push(`fs.activity_sheet_id = $${params.length}`);
     }
 
-    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
     const result = await query(
       `SELECT fs.*, ash.sheet_type, ash.sheet_number, ash.title AS sheet_title,
               u.first_name || ' ' || u.last_name AS teacher_name
        FROM follow_up_sessions fs
        JOIN activity_sheets ash ON fs.activity_sheet_id = ash.id
+       JOIN students st ON fs.student_id = st.id
+       JOIN classes c ON st.class_id = c.id
        JOIN users u ON fs.teacher_id = u.id
-       ${where}
+       WHERE ${conditions.join(' AND ')}
        ORDER BY fs.session_date DESC`,
       params
     );

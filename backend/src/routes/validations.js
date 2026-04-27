@@ -145,15 +145,33 @@ router.get('/', requireAuth, async (req, res, next) => {
       conditions.push(`v.created_at >= NOW() - INTERVAL '90 days'`);
     }
 
+    // Pour les vues "en cours" et "urgentes", on ne veut qu'une ligne par fiche
+    // (la validation la plus récente). Sans DISTINCT ON, une fiche avec N tentatives
+    // partielles apparaîtrait N fois dans la liste.
+    const dedupBySheet = status === 'in_progress' || status === 'urgent';
+
     const result = await query(
-      `SELECT v.*, ash.sheet_type, ash.sheet_number, ash.title AS sheet_title, ash.status AS sheet_status,
-              s.id AS student_id, s.first_name, s.last_name, s.student_number,
-              EXTRACT(DAY FROM NOW() - v.created_at) AS days_since_validation
-       FROM validations v
-       JOIN activity_sheets ash ON v.activity_sheet_id = ash.id
-       JOIN students s ON ash.student_id = s.id
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY v.created_at DESC`,
+      dedupBySheet
+        ? `SELECT * FROM (
+             SELECT DISTINCT ON (v.activity_sheet_id)
+               v.*, ash.sheet_type, ash.sheet_number, ash.title AS sheet_title, ash.status AS sheet_status,
+               s.id AS student_id, s.first_name, s.last_name, s.student_number,
+               EXTRACT(DAY FROM NOW() - v.created_at) AS days_since_validation
+             FROM validations v
+             JOIN activity_sheets ash ON v.activity_sheet_id = ash.id
+             JOIN students s ON ash.student_id = s.id
+             WHERE ${conditions.join(' AND ')}
+             ORDER BY v.activity_sheet_id, v.created_at DESC
+           ) deduped
+           ORDER BY days_since_validation DESC NULLS LAST`
+        : `SELECT v.*, ash.sheet_type, ash.sheet_number, ash.title AS sheet_title, ash.status AS sheet_status,
+                  s.id AS student_id, s.first_name, s.last_name, s.student_number,
+                  EXTRACT(DAY FROM NOW() - v.created_at) AS days_since_validation
+           FROM validations v
+           JOIN activity_sheets ash ON v.activity_sheet_id = ash.id
+           JOIN students s ON ash.student_id = s.id
+           WHERE ${conditions.join(' AND ')}
+           ORDER BY v.created_at DESC`,
       params
     );
     res.json(result.rows);

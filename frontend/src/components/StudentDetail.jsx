@@ -179,6 +179,14 @@ export default function StudentDetail({ student, onClose }) {
   const drcvSheets = sheets.filter((s) => s.sheet_type === 'DRCV').sort((a, b) => a.sheet_number - b.sheet_number);
   const activeSheets = sheets.filter((s) => s.status !== 'validated');
 
+  // Calculés depuis les fiches chargées plutôt que depuis le prop (qui peut être obsolète)
+  const adocValidated = sheets.length > 0
+    ? sheets.filter((s) => s.sheet_type === 'ADOC' && s.status === 'validated').length
+    : (student.adoc_validated ?? 0);
+  const drcvValidated = sheets.length > 0
+    ? sheets.filter((s) => s.sheet_type === 'DRCV' && s.status === 'validated').length
+    : (student.drcv_validated ?? 0);
+
   const sessionsForSheet = (sheetId) => sessions.filter((s) => s.activity_sheet_id === sheetId);
 
   const avgGrade = validations.filter((v) => v.session_grade).length
@@ -237,7 +245,7 @@ export default function StudentDetail({ student, onClose }) {
               </div>
               <div style={{ fontSize: '0.82rem', opacity: 0.8 }}>
                 N° {student.student_number} · Moyenne : {avgGrade}/10
-                · ADOC {student.adoc_validated ?? 0}/5 · DRCV {student.drcv_validated ?? 0}/4
+                · ADOC {adocValidated}/5 · DRCV {drcvValidated}/4
                 {alerts.length > 0 && <span style={{ marginLeft: 8, background: 'rgba(231,76,60,0.8)', borderRadius: 10, padding: '1px 7px' }}>⚠️ {alerts.length} alerte{alerts.length > 1 ? 's' : ''}</span>}
               </div>
             </div>

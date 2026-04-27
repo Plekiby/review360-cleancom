@@ -49,6 +49,10 @@ export default function TeacherGrades() {
 
   const comments = filtered.filter((v) => v.comments).length;
 
+  // Compter les fiches distinctes (pas les lignes validation) pour éviter le double-comptage
+  const validatedSheetIds = new Set(validations.filter((v) => v.sheet_status === 'validated').map((v) => v.activity_sheet_id));
+  const inProgressSheetIds = new Set(validations.filter((v) => v.sheet_status === 'in_progress').map((v) => v.activity_sheet_id));
+
   // ── Thèmes calculés à partir des vraies données ───────────────────────────
   // Moyenne par fiche (type + numéro), uniquement celles avec au moins 1 note.
   const sheetStats = (() => {
@@ -92,11 +96,11 @@ export default function TeacherGrades() {
           <div className="stat-label">Moyenne globale</div>
         </div>
         <div className="stat-box success">
-          <div className="stat-value">{validations.filter((v) => v.sheet_status === 'validated').length}</div>
+          <div className="stat-value">{validatedSheetIds.size}</div>
           <div className="stat-label">Fiches validées</div>
         </div>
         <div className="stat-box warning">
-          <div className="stat-value">{validations.filter((v) => v.sheet_status === 'in_progress').length}</div>
+          <div className="stat-value">{inProgressSheetIds.size}</div>
           <div className="stat-label">En cours</div>
         </div>
         <div className="stat-box info">
@@ -195,8 +199,6 @@ export default function TeacherGrades() {
                         last_name: v.last_name,
                         first_name: v.first_name,
                         student_number: v.student_number,
-                        adoc_validated: 0,
-                        drcv_validated: 0,
                       })}
                     >
                       Voir détail
