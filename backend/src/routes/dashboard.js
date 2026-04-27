@@ -128,17 +128,28 @@ router.get('/school', requireAdmin, async (req, res, next) => {
   }
 });
 
-// GET /api/dashboard/reports — synthèse pour AdminReports
+// Filtre temporel — appliqué aux notes/validations uniquement.
+// Les comptages de fiches restent l'état actuel (un état, pas une période).
+const PERIOD_DAYS = { week: 7, month: 30, quarter: 90 };
+function periodClause(period, alias = 'v') {
+  const days = PERIOD_DAYS[period];
+  if (!days) return '';
+  return ` AND ${alias}.created_at >= NOW() - INTERVAL '${days} days'`;
+}
+
+// GET /api/dashboard/reports?period=week|month|quarter — synthèse pour AdminReports
 router.get('/reports', requireAdmin, async (req, res, next) => {
   try {
     const { school_id } = req.user;
+    const { period } = req.query;
+    const periodFilter = periodClause(period, 'v');
 
     const summary = await query(
       `SELECT
          COUNT(DISTINCT s.id) AS total_students,
          COUNT(DISTINCT ash.id) AS total_sheets,
          COUNT(DISTINCT CASE WHEN ash.status = 'validated' THEN ash.id END) AS validated_sheets,
-         ROUND(AVG(v.session_grade), 1) AS global_avg,
+         ROUND(AVG(CASE WHEN TRUE${periodFilter} THEN v.session_grade END), 1) AS global_avg,
          COUNT(DISTINCT CASE WHEN al.alert_type IN ('ORANGE','ROUGE') AND al.is_resolved = false THEN s.id END) AS at_risk_students
        FROM students s
        JOIN classes c ON s.class_id = c.id
@@ -154,7 +165,7 @@ router.get('/reports', requireAdmin, async (req, res, next) => {
          c.name AS class_name,
          u.first_name || ' ' || u.last_name AS teacher_name,
          COUNT(DISTINCT s.id) AS students,
-         ROUND(AVG(v.session_grade), 1) AS avg_grade,
+         ROUND(AVG(CASE WHEN TRUE${periodFilter} THEN v.session_grade END), 1) AS avg_grade,
          ROUND(100.0 * COUNT(DISTINCT CASE WHEN ash.status = 'validated' THEN ash.id END) / NULLIF(COUNT(DISTINCT ash.id), 0), 0) AS progress_pct,
          COUNT(DISTINCT CASE WHEN al.is_resolved = false THEN al.id END) AS active_alerts
        FROM classes c
@@ -192,9 +203,9 @@ router.get('/reports', requireAdmin, async (req, res, next) => {
          u.first_name || ' ' || u.last_name AS teacher_name,
          COUNT(DISTINCT c.id) AS classes_count,
          COUNT(DISTINCT s.id) AS students,
-         ROUND(AVG(v.session_grade), 1) AS avg_grade,
+         ROUND(AVG(CASE WHEN TRUE${periodFilter} THEN v.session_grade END), 1) AS avg_grade,
          COUNT(DISTINCT CASE WHEN ash.status = 'validated' THEN ash.id END) AS validated_sheets,
-         COUNT(DISTINCT v.id) AS validations_count
+         COUNT(DISTINCT CASE WHEN TRUE${periodFilter} THEN v.id END) AS validations_count
        FROM users u
        LEFT JOIN classes c ON c.teacher_id = u.id AND c.is_active = true
        LEFT JOIN students s ON s.class_id = c.id AND s.is_active = true
@@ -206,7 +217,8 @@ router.get('/reports', requireAdmin, async (req, res, next) => {
       [school_id]
     );
 
-    // Alertes actives — détail par type
+    // Alertes actives — détail par type. Filtre période = créées dans la fenêtre.
+    const alertPeriodFilter = periodClause(period, 'a');
     const alertBreakdown = await query(
       `SELECT
          a.alert_type,
@@ -215,7 +227,7 @@ router.get('/reports', requireAdmin, async (req, res, next) => {
        FROM alerts a
        JOIN students s ON a.student_id = s.id
        JOIN classes c ON s.class_id = c.id
-       WHERE c.school_id = $1 AND a.is_resolved = false
+       WHERE c.school_id = $1 AND a.is_resolved = false${alertPeriodFilter}
        GROUP BY a.alert_type`,
       [school_id]
     );
@@ -226,6 +238,7 @@ router.get('/reports', requireAdmin, async (req, res, next) => {
       by_sheet_type: bySheetType.rows,
       by_teacher: byTeacher.rows,
       alerts_breakdown: alertBreakdown.rows,
+      period: period || 'all',
     });
   } catch (err) {
     next(err);

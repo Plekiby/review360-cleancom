@@ -88,7 +88,10 @@ export const api = {
   // Dashboard
   getTeacherDashboard: () => request('/dashboard/teacher'),
   getSchoolDashboard: () => request('/dashboard/school'),
-  getReports: () => request('/dashboard/reports'),
+  getReports: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/dashboard/reports${qs ? `?${qs}` : ''}`);
+  },
 
   // Alerts
   createAlert: (data) => request('/alerts', { method: 'POST', body: JSON.stringify(data) }),

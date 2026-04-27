@@ -14,15 +14,25 @@ const ALERT_BADGES = {
   ROUGE:  'badge-danger',
 };
 
+const PERIOD_OPTIONS = [
+  { id: 'all',     label: 'Toute l\'année' },
+  { id: 'week',    label: 'Cette semaine' },
+  { id: 'month',   label: 'Ce mois' },
+  { id: 'quarter', label: 'Ce trimestre' },
+];
+
 export default function AdminReports() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeReport, setActiveReport] = useState('quarterly');
+  const [period, setPeriod] = useState('all');
   const [exporting, setExporting] = useState(null);
 
   useEffect(() => {
-    api.getReports().then((d) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+    setLoading(true);
+    const params = period === 'all' ? {} : { period };
+    api.getReports(params).then((d) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+  }, [period]);
 
   const handleExport = async (format) => {
     setExporting(format);
@@ -72,9 +82,13 @@ export default function AdminReports() {
       </div>
 
       <div className="info-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3>📄 {REPORT_TYPES.find((r) => r.id === activeReport)?.label}</h3>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0 }}>📄 {REPORT_TYPES.find((r) => r.id === activeReport)?.label}</h3>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <label style={{ fontSize: '0.82rem', color: '#7f8c8d', fontWeight: 500 }}>Période :</label>
+            <select value={period} onChange={(e) => setPeriod(e.target.value)} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #e0e0e0', fontSize: '0.85rem' }} disabled={loading}>
+              {PERIOD_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
             <button className="btn btn-danger" onClick={() => handleExport('pdf')} disabled={!!exporting}>
               {exporting === 'pdf' ? 'Génération...' : '⬇️ PDF'}
             </button>
@@ -83,6 +97,11 @@ export default function AdminReports() {
             </button>
           </div>
         </div>
+        {period !== 'all' && (
+          <div style={{ fontSize: '0.78rem', color: '#7f8c8d', marginBottom: 14, padding: '6px 10px', background: '#f8f9fa', borderRadius: 4, borderLeft: '3px solid #667eea' }}>
+            ℹ️ Le filtre période s'applique aux notes/validations. Les comptages de fiches reflètent l'état actuel.
+          </div>
+        )}
 
         {/* Synthèse globale (toujours affichée en haut) */}
         {summary && (
