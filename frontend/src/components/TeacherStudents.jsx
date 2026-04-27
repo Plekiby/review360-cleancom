@@ -125,7 +125,6 @@ export default function TeacherStudents({ user }) {
                 <th>DRCV</th>
                 <th>Dernier suivi</th>
                 <th>Statut</th>
-                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -155,14 +154,11 @@ export default function TeacherStudents({ user }) {
                         : <span style={{ color: '#e74c3c' }}>Jamais</span>}
                     </td>
                     <td>{statusBadge(status)}</td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <button className="btn btn-primary" onClick={() => setSelectedStudent(s)}>Voir détail</button>
-                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#7f8c8d', padding: 24 }}>
+                <tr><td colSpan={7} style={{ textAlign: 'center', color: '#7f8c8d', padding: 24 }}>
                   {search ? `Aucun résultat pour "${search}"` : 'Aucun étudiant'}
                 </td></tr>
               )}

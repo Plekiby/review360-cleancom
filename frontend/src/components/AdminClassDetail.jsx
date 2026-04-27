@@ -17,7 +17,7 @@ function gradeClass(g) {
   return 'grade-low';
 }
 
-export default function AdminClassDetail() {
+export default function AdminClassDetail({ initialClassId, onConsumeInitial }) {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [students, setStudents] = useState([]);
@@ -29,10 +29,27 @@ export default function AdminClassDetail() {
   useEffect(() => {
     api.getClasses().then((cls) => {
       setClasses(cls);
-      if (cls.length > 0) setSelectedClass(cls[0].id);
+      if (cls.length > 0) {
+        // Si on arrive depuis Monitoring avec une classe pré-sélectionnée, on l'utilise
+        const preselect = initialClassId && cls.find((c) => c.id === initialClassId)
+          ? initialClassId
+          : cls[0].id;
+        setSelectedClass(preselect);
+        if (initialClassId && onConsumeInitial) onConsumeInitial();
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Si initialClassId change pendant qu'on est sur la page (ex: clic répété)
+  useEffect(() => {
+    if (initialClassId && classes.find((c) => c.id === initialClassId) && initialClassId !== selectedClass) {
+      setSelectedClass(initialClassId);
+      if (onConsumeInitial) onConsumeInitial();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialClassId]);
 
   useEffect(() => {
     if (!selectedClass) return;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 
 function classCardStatus(cls) {
@@ -14,19 +14,41 @@ function progressColor(pct) {
   return 'danger';
 }
 
-export default function AdminMonitoring() {
+const SORT_OPTIONS = [
+  { id: 'name',        label: 'Nom (A→Z)' },
+  { id: 'avg_grade',   label: 'Moyenne ↓' },
+  { id: 'adoc_pct',    label: 'ADOC % ↓' },
+  { id: 'drcv_pct',    label: 'DRCV % ↓' },
+  { id: 'alerts',      label: 'Alertes ↓' },
+];
+
+export default function AdminMonitoring({ onClassClick }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('name');
 
   useEffect(() => {
     api.getSchoolDashboard().then((d) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
+  const sortedClasses = useMemo(() => {
+    if (!data?.classes) return [];
+    const copy = [...data.classes];
+    const num = (v) => parseFloat(v) || 0;
+    switch (sortBy) {
+      case 'avg_grade': return copy.sort((a, b) => num(b.avg_grade) - num(a.avg_grade));
+      case 'adoc_pct':  return copy.sort((a, b) => num(b.adoc_pct) - num(a.adoc_pct));
+      case 'drcv_pct':  return copy.sort((a, b) => num(b.drcv_pct) - num(a.drcv_pct));
+      case 'alerts':    return copy.sort((a, b) => (b.critical_alerts || 0) - (a.critical_alerts || 0));
+      default:          return copy.sort((a, b) => (a.class_name || '').localeCompare(b.class_name || ''));
+    }
+  }, [data, sortBy]);
+
   if (loading) return <div className="info-card">Chargement...</div>;
   if (!data) return <div className="info-card">Erreur de chargement</div>;
 
-  const { global: g, classes } = data;
-  const criticalClass = classes?.find((c) => parseFloat(c.adoc_pct) < 40 || parseFloat(c.drcv_pct) < 40);
+  const { global: g } = data;
+  const criticalClass = sortedClasses.find((c) => parseFloat(c.adoc_pct) < 40 || parseFloat(c.drcv_pct) < 40);
 
   return (
     <>
@@ -52,23 +74,51 @@ export default function AdminMonitoring() {
 
       {/* Bannière critique */}
       {criticalClass && (
-        <div className="alert-banner danger">
+        <div
+          className="alert-banner danger"
+          style={{ cursor: onClassClick ? 'pointer' : 'default' }}
+          onClick={() => onClassClick?.(criticalClass.id)}
+          title={onClassClick ? 'Cliquer pour voir le détail' : undefined}
+        >
           🚨 Classe {criticalClass.class_name} en alerte critique — {criticalClass.adoc_pct}% ADOC / {criticalClass.drcv_pct}% DRCV
         </div>
       )}
 
+      {/* Tri */}
+      <div className="filters-bar" style={{ marginBottom: 12 }}>
+        <label style={{ fontWeight: 600, fontSize: '0.85rem' }}>Trier par :</label>
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #e0e0e0' }}>
+          {SORT_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+        <span style={{ fontSize: '0.8rem', color: '#7f8c8d', marginLeft: 'auto' }}>
+          {sortedClasses.length} classe{sortedClasses.length > 1 ? 's' : ''}
+          {onClassClick && ' · Cliquez sur une carte pour voir le détail'}
+        </span>
+      </div>
+
       {/* Cards classes */}
       <div className="class-cards-grid">
-        {(classes || []).map((cls) => {
+        {sortedClasses.map((cls) => {
           const status = classCardStatus(cls);
           const adocPct = parseFloat(cls.adoc_pct) || 0;
           const drcvPct = parseFloat(cls.drcv_pct) || 0;
+          const clickable = !!onClassClick;
           return (
-            <div className={`class-card ${status}`} key={cls.id}>
+            <div
+              className={`class-card ${status}`}
+              key={cls.id}
+              onClick={clickable ? () => onClassClick(cls.id) : undefined}
+              role={clickable ? 'button' : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onKeyDown={clickable ? (e) => { if (e.key === 'Enter') onClassClick(cls.id); } : undefined}
+              style={clickable ? { cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' } : undefined}
+              onMouseEnter={clickable ? (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)'; } : undefined}
+              onMouseLeave={clickable ? (e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; } : undefined}
+            >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '1rem' }}>{cls.class_name}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>{cls.teacher_name}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#7f8c8d' }}>{cls.teacher_name || '—'}</div>
                 </div>
                 {status === 'complete' && <span className="badge badge-success">✅ Terminée</span>}
                 {status === 'critical' && <span className="badge badge-danger">🚨 Critique</span>}

@@ -49,6 +49,38 @@ export default function TeacherGrades() {
 
   const comments = filtered.filter((v) => v.comments).length;
 
+  // ── Thèmes calculés à partir des vraies données ───────────────────────────
+  // Moyenne par fiche (type + numéro), uniquement celles avec au moins 1 note.
+  const sheetStats = (() => {
+    const map = new Map();
+    for (const v of filtered) {
+      if (!v.session_grade) continue;
+      const key = `${v.sheet_type} ${v.sheet_number}`;
+      const entry = map.get(key) || { key, type: v.sheet_type, num: v.sheet_number, sum: 0, count: 0 };
+      entry.sum += parseFloat(v.session_grade);
+      entry.count += 1;
+      map.set(key, entry);
+    }
+    return [...map.values()].map((e) => ({ ...e, avg: e.sum / e.count }));
+  })();
+  const topSheets = [...sheetStats].sort((a, b) => b.avg - a.avg).slice(0, 3);
+  const bottomSheets = [...sheetStats].sort((a, b) => a.avg - b.avg).slice(0, 3);
+
+  // Taux de validation par checkpoint (sur l'ensemble filtré).
+  const checkpointStats = (() => {
+    const total = filtered.length;
+    if (!total) return null;
+    const subj = filtered.filter((v) => v.has_subject).length;
+    const ctx  = filtered.filter((v) => v.context_well_formulated).length;
+    const obj  = filtered.filter((v) => v.objectives_validated).length;
+    const items = [
+      { label: 'Sujet défini',    rate: subj / total, count: subj },
+      { label: 'Contexte formulé', rate: ctx  / total, count: ctx  },
+      { label: 'Objectifs validés', rate: obj  / total, count: obj  },
+    ];
+    return { items, total, weakest: [...items].sort((a, b) => a.rate - b.rate)[0] };
+  })();
+
   if (loading) return <div className="info-card">Chargement...</div>;
 
   return (
@@ -180,35 +212,69 @@ export default function TeacherGrades() {
         </div>
       </div>
 
-      {/* Thèmes récurrents */}
+      {/* Thèmes récurrents — calculés depuis les validations filtrées */}
       <div className="info-card">
-        <h3>💡 Analyse des thèmes récurrents</h3>
-        <div className="themes-grid">
-          <div className="theme-card success">
-            <h4>✅ Points forts</h4>
-            <ul>
-              <li>• Présentation claire des sujets</li>
-              <li>• Bonne maîtrise du contexte</li>
-              <li>• Fiches bien structurées</li>
-            </ul>
+        <h3>💡 Analyse des thèmes</h3>
+        {sheetStats.length === 0 && !checkpointStats ? (
+          <p style={{ color: '#7f8c8d', fontSize: '0.88rem', margin: 0 }}>
+            Pas encore assez de validations notées pour générer une analyse. Ajoutez des validations avec note pour voir apparaître les tendances.
+          </p>
+        ) : (
+          <div className="themes-grid">
+            <div className="theme-card success">
+              <h4>✅ Fiches les mieux notées</h4>
+              {topSheets.length > 0 ? (
+                <ul>
+                  {topSheets.map((s) => (
+                    <li key={s.key}>
+                      • <strong>{s.key}</strong> — {s.avg.toFixed(1)}/10 <span style={{ color: '#7f8c8d', fontSize: '0.78rem' }}>({s.count} note{s.count > 1 ? 's' : ''})</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ color: '#7f8c8d', fontSize: '0.82rem' }}>Aucune note disponible.</p>
+              )}
+            </div>
+
+            <div className="theme-card warning">
+              <h4>⚠️ Fiches à retravailler</h4>
+              {bottomSheets.length > 0 ? (
+                <ul>
+                  {bottomSheets.map((s) => (
+                    <li key={s.key}>
+                      • <strong>{s.key}</strong> — {s.avg.toFixed(1)}/10 <span style={{ color: '#7f8c8d', fontSize: '0.78rem' }}>({s.count} note{s.count > 1 ? 's' : ''})</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ color: '#7f8c8d', fontSize: '0.82rem' }}>Aucune note disponible.</p>
+              )}
+            </div>
+
+            <div className="theme-card info">
+              <h4>📋 Critères de validation</h4>
+              {checkpointStats ? (
+                <>
+                  <ul>
+                    {checkpointStats.items.map((it) => (
+                      <li key={it.label}>
+                        • {it.label} : <strong>{Math.round(it.rate * 100)}%</strong>
+                        <span style={{ color: '#7f8c8d', fontSize: '0.78rem' }}> ({it.count}/{checkpointStats.total})</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {checkpointStats.weakest && checkpointStats.weakest.rate < 0.7 && (
+                    <p style={{ fontSize: '0.8rem', color: '#c0392b', marginTop: 6 }}>
+                      💡 Point faible : « {checkpointStats.weakest.label} » est validé seulement {Math.round(checkpointStats.weakest.rate * 100)}% du temps.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p style={{ color: '#7f8c8d', fontSize: '0.82rem' }}>Pas encore de validation enregistrée.</p>
+              )}
+            </div>
           </div>
-          <div className="theme-card warning">
-            <h4>⚠️ Axes d'amélioration</h4>
-            <ul>
-              <li>• Objectifs à reformuler</li>
-              <li>• Délais de remise à améliorer</li>
-              <li>• Profondeur d'analyse</li>
-            </ul>
-          </div>
-          <div className="theme-card info">
-            <h4>💡 Recommandations</h4>
-            <ul>
-              <li>• Planifier les sessions à l'avance</li>
-              <li>• Relances systématiques J+7</li>
-              <li>• Grille d'auto-évaluation</li>
-            </ul>
-          </div>
-        </div>
+        )}
       </div>
 
       {selectedStudent && (

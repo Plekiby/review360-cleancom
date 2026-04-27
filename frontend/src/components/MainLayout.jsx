@@ -23,6 +23,7 @@ export default function MainLayout({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState(
     user.role === 'admin' ? 'monitoring' : 'students'
   );
+  const [pendingClassId, setPendingClassId] = useState(null);
 
   const canSwitchMode = user.role === 'admin';
   const isAdmin = activeMode === 'admin';
@@ -35,6 +36,11 @@ export default function MainLayout({ user, onLogout }) {
   };
 
   const handleTabChange = (tabId) => setActiveTab(tabId);
+
+  const goToClass = (classId) => {
+    setPendingClassId(classId);
+    setActiveTab('classes');
+  };
 
   return (
     <>
@@ -78,8 +84,8 @@ export default function MainLayout({ user, onLogout }) {
         {!isAdmin && activeTab === 'validations' && <TeacherValidations user={user} />}
         {!isAdmin && activeTab === 'grades'      && <TeacherGrades user={user} />}
 
-        {isAdmin  && activeTab === 'monitoring'  && <AdminMonitoring user={user} />}
-        {isAdmin  && activeTab === 'classes'     && <AdminClassDetail user={user} />}
+        {isAdmin  && activeTab === 'monitoring'  && <AdminMonitoring user={user} onClassClick={goToClass} />}
+        {isAdmin  && activeTab === 'classes'     && <AdminClassDetail user={user} initialClassId={pendingClassId} onConsumeInitial={() => setPendingClassId(null)} />}
         {isAdmin  && activeTab === 'reports'     && <AdminReports user={user} />}
       </div>
     </>
