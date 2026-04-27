@@ -63,10 +63,50 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
+// Transitions de statut autorisées
+const VALID_TRANSITIONS = {
+  scheduled:   new Set(['completed', 'cancelled', 'rescheduled']),
+  rescheduled: new Set(['completed', 'cancelled', 'scheduled']),
+  completed:   new Set([]), // terminal — on garde figé après réalisation
+  cancelled:   new Set([]), // terminal
+};
+
 // PATCH /api/sessions/:id — marquer complétée / annulée / reportée + notes post-session
 router.patch('/:id', requireAuth, async (req, res, next) => {
   try {
     const { status, location, objective, notes } = req.body;
+
+    // Charger la session pour vérifier ownership + transition
+    const existing = await query(
+      `SELECT fs.*, s.school_id
+         FROM follow_up_sessions fs
+         JOIN students s ON fs.student_id = s.id
+        WHERE fs.id = $1`,
+      [req.params.id]
+    );
+    if (!existing.rows[0]) return res.status(404).json({ error: 'Session introuvable' });
+
+    const session = existing.rows[0];
+
+    // Multi-tenant : on n'autorise jamais la modif d'une session hors de l'école courante
+    if (session.school_id !== req.user.school_id) {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+    // Ownership : seul le prof qui a créé la session (ou un admin de l'école) peut la modifier
+    if (req.user.role !== 'admin' && session.teacher_id !== req.user.id) {
+      return res.status(403).json({ error: 'Vous ne pouvez modifier que vos propres sessions' });
+    }
+
+    // Validation des transitions de statut
+    if (status && status !== session.status) {
+      const allowed = VALID_TRANSITIONS[session.status] || new Set();
+      if (!allowed.has(status)) {
+        return res.status(409).json({
+          error: `Transition non autorisée : ${session.status} → ${status}`,
+        });
+      }
+    }
+
     const result = await query(
       `UPDATE follow_up_sessions
        SET status = COALESCE($1, status),
@@ -78,7 +118,6 @@ router.patch('/:id', requireAuth, async (req, res, next) => {
        RETURNING *`,
       [status || null, location || null, objective || null, notes !== undefined ? notes : null, req.params.id]
     );
-    if (!result.rows[0]) return res.status(404).json({ error: 'Session introuvable' });
     res.json(result.rows[0]);
   } catch (err) {
     next(err);

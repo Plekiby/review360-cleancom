@@ -31,21 +31,23 @@ export default function TeacherGrades() {
     return true;
   });
 
-  // Données graphique: note moyenne par fiche type
+  // Données graphique : moyenne par fiche — calculées sur le jeu filtré
+  // pour que les barres reflètent les filtres étudiant / type / période actifs.
   const adocGrades = ADOC_LABELS.map((_, i) => {
-    const vals = validations.filter((v) => v.sheet_type === 'ADOC' && v.sheet_number === i + 1 && v.session_grade);
+    const vals = filtered.filter((v) => v.sheet_type === 'ADOC' && v.sheet_number === i + 1 && v.session_grade);
     return vals.length ? vals.reduce((s, v) => s + parseFloat(v.session_grade), 0) / vals.length : 0;
   });
   const drcvGrades = DRCV_LABELS.map((_, i) => {
-    const vals = validations.filter((v) => v.sheet_type === 'DRCV' && v.sheet_number === i + 1 && v.session_grade);
+    const vals = filtered.filter((v) => v.sheet_type === 'DRCV' && v.sheet_number === i + 1 && v.session_grade);
     return vals.length ? vals.reduce((s, v) => s + parseFloat(v.session_grade), 0) / vals.length : 0;
   });
 
-  const avgGrade = validations.filter((v) => v.session_grade).length
-    ? (validations.reduce((s, v) => s + (parseFloat(v.session_grade) || 0), 0) / validations.filter((v) => v.session_grade).length).toFixed(1)
+  const gradedFiltered = filtered.filter((v) => v.session_grade);
+  const avgGrade = gradedFiltered.length
+    ? (gradedFiltered.reduce((s, v) => s + (parseFloat(v.session_grade) || 0), 0) / gradedFiltered.length).toFixed(1)
     : '—';
 
-  const comments = validations.filter((v) => v.comments).length;
+  const comments = filtered.filter((v) => v.comments).length;
 
   if (loading) return <div className="info-card">Chargement...</div>;
 

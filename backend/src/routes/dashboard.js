@@ -169,7 +169,64 @@ router.get('/reports', requireAdmin, async (req, res, next) => {
       [school_id]
     );
 
-    res.json({ summary: summary.rows[0], by_class: byClass.rows });
+    // Vrais comptages ADOC / DRCV par statut (au lieu des ratios inventés)
+    const bySheetType = await query(
+      `SELECT
+         ash.sheet_type,
+         COUNT(*) FILTER (WHERE ash.status = 'validated')   AS validated,
+         COUNT(*) FILTER (WHERE ash.status = 'in_progress') AS in_progress,
+         COUNT(*) FILTER (WHERE ash.status = 'not_started') AS not_started,
+         COUNT(*) AS total
+       FROM activity_sheets ash
+       JOIN students s ON ash.student_id = s.id
+       JOIN classes c ON s.class_id = c.id
+       WHERE c.school_id = $1 AND s.is_active = true
+       GROUP BY ash.sheet_type`,
+      [school_id]
+    );
+
+    // Statistiques par formateur
+    const byTeacher = await query(
+      `SELECT
+         u.id AS teacher_id,
+         u.first_name || ' ' || u.last_name AS teacher_name,
+         COUNT(DISTINCT c.id) AS classes_count,
+         COUNT(DISTINCT s.id) AS students,
+         ROUND(AVG(v.session_grade), 1) AS avg_grade,
+         COUNT(DISTINCT CASE WHEN ash.status = 'validated' THEN ash.id END) AS validated_sheets,
+         COUNT(DISTINCT v.id) AS validations_count
+       FROM users u
+       LEFT JOIN classes c ON c.teacher_id = u.id AND c.is_active = true
+       LEFT JOIN students s ON s.class_id = c.id AND s.is_active = true
+       LEFT JOIN activity_sheets ash ON ash.student_id = s.id
+       LEFT JOIN validations v ON v.activity_sheet_id = ash.id
+       WHERE u.school_id = $1 AND u.role = 'teacher' AND u.is_active = true
+       GROUP BY u.id, u.first_name, u.last_name
+       ORDER BY students DESC NULLS LAST`,
+      [school_id]
+    );
+
+    // Alertes actives — détail par type
+    const alertBreakdown = await query(
+      `SELECT
+         a.alert_type,
+         COUNT(*) AS count,
+         COUNT(*) FILTER (WHERE a.created_at > NOW() - INTERVAL '7 days') AS recent
+       FROM alerts a
+       JOIN students s ON a.student_id = s.id
+       JOIN classes c ON s.class_id = c.id
+       WHERE c.school_id = $1 AND a.is_resolved = false
+       GROUP BY a.alert_type`,
+      [school_id]
+    );
+
+    res.json({
+      summary: summary.rows[0],
+      by_class: byClass.rows,
+      by_sheet_type: bySheetType.rows,
+      by_teacher: byTeacher.rows,
+      alerts_breakdown: alertBreakdown.rows,
+    });
   } catch (err) {
     next(err);
   }

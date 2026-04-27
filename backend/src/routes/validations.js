@@ -16,14 +16,30 @@ router.post('/', requireAuth, async (req, res, next) => {
       methodology_respected, session_grade, comments
     } = req.body;
 
+    if (!activity_sheet_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'activity_sheet_id requis' });
+    }
+
+    // Bloquer la re-validation d'une fiche déjà validée
+    const sheetCheck = await client.query(
+      `SELECT student_id, status FROM activity_sheets WHERE id = $1`,
+      [activity_sheet_id]
+    );
+    if (!sheetCheck.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Fiche introuvable' });
+    }
+    if (sheetCheck.rows[0].status === 'validated') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Cette fiche est déjà validée' });
+    }
+
+    const studentId = sheetCheck.rows[0].student_id;
+
     // Si pas de session fournie → en créer une automatiquement (validation directe)
     let session_id = providedSessionId;
     if (!session_id) {
-      const sheetForSession = await client.query(
-        'SELECT student_id FROM activity_sheets WHERE id = $1',
-        [activity_sheet_id]
-      );
-      const studentId = sheetForSession.rows[0]?.student_id;
       const autoSession = await client.query(
         `INSERT INTO follow_up_sessions (student_id, activity_sheet_id, teacher_id, session_date, objective, status)
          VALUES ($1, $2, $3, CURRENT_DATE, 'Validation directe', 'completed')
@@ -50,30 +66,24 @@ router.post('/', requireAuth, async (req, res, next) => {
       [newStatus, activity_sheet_id]
     );
 
-    // Récupérer l'étudiant pour logique alertes
-    const sheetResult = await client.query(
-      'SELECT student_id FROM activity_sheets WHERE id = $1',
-      [activity_sheet_id]
-    );
-    const studentId = sheetResult.rows[0]?.student_id;
+    // Génération d'alertes pour les points manquants — dédupliquées via WHERE NOT EXISTS
+    // (pas de contrainte UNIQUE en DB, donc ON CONFLICT n'a aucun effet)
+    const upsertAlert = async (reason) => {
+      await client.query(
+        `INSERT INTO alerts (student_id, activity_sheet_id, alert_type, reason)
+         SELECT $1, $2, 'ORANGE', $3
+         WHERE NOT EXISTS (
+           SELECT 1 FROM alerts
+           WHERE student_id = $1 AND activity_sheet_id = $2 AND reason = $3 AND is_resolved = false
+         )`,
+        [studentId, activity_sheet_id, reason]
+      );
+    };
 
-    if (studentId && !allValidated) {
-      // Vérifier si points manquants → alerte ORANGE
-      if (!has_subject) {
-        await client.query(
-          `INSERT INTO alerts (student_id, activity_sheet_id, alert_type, reason)
-           VALUES ($1, $2, 'ORANGE', 'Sujet non défini')
-           ON CONFLICT DO NOTHING`,
-          [studentId, activity_sheet_id]
-        );
-      }
-      if (!context_well_formulated) {
-        await client.query(
-          `INSERT INTO alerts (student_id, activity_sheet_id, alert_type, reason)
-           VALUES ($1, $2, 'ORANGE', 'Contexte non bien formulé')`,
-          [studentId, activity_sheet_id]
-        );
-      }
+    if (!allValidated) {
+      if (!has_subject) await upsertAlert('Sujet non défini');
+      if (!context_well_formulated) await upsertAlert('Contexte non bien formulé');
+      if (!objectives_validated) await upsertAlert('Objectifs non validés');
     }
 
     // Audit log

@@ -24,7 +24,7 @@ export default function AdminClassDetail() {
   const [loading, setLoading] = useState(true);
   const [showImport, setShowImport] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [escalating, setEscalating] = useState(null);
+  const [escaladeStudent, setEscaladeStudent] = useState(null);
 
   useEffect(() => {
     api.getClasses().then((cls) => {
@@ -39,17 +39,8 @@ export default function AdminClassDetail() {
     api.getClassStudents(selectedClass).then(setStudents);
   }, [selectedClass]);
 
-  const handleEscalade = async (s) => {
-    if (!window.confirm(`Escalader ${s.last_name} ${s.first_name} en alerte ROUGE ?`)) return;
-    setEscalating(s.id);
-    try {
-      await api.createAlert({ student_id: s.id });
-      api.getClassStudents(selectedClass).then(setStudents);
-    } catch (err) {
-      alert(`Erreur : ${err.message}`);
-    } finally {
-      setEscalating(null);
-    }
+  const refreshStudents = () => {
+    if (selectedClass) api.getClassStudents(selectedClass).then(setStudents);
   };
 
   if (loading) return <div className="info-card">Chargement...</div>;
@@ -173,12 +164,8 @@ export default function AdminClassDetail() {
                       </td>
                       <td>
                         <button className="btn btn-primary" style={{ marginRight: 6 }} onClick={() => setSelectedStudent(s)}>Convoquer</button>
-                        <button
-                          className="btn btn-warning"
-                          disabled={escalating === s.id}
-                          onClick={() => handleEscalade(s)}
-                        >
-                          {escalating === s.id ? '...' : 'Escalader'}
+                        <button className="btn btn-warning" onClick={() => setEscaladeStudent(s)}>
+                          Escalader
                         </button>
                       </td>
                     </tr>
@@ -247,6 +234,175 @@ export default function AdminClassDetail() {
           onClose={() => setSelectedStudent(null)}
         />
       )}
+
+      {escaladeStudent && (
+        <EscaladeForm
+          student={escaladeStudent}
+          onClose={() => setEscaladeStudent(null)}
+          onEscalated={() => { setEscaladeStudent(null); refreshStudents(); }}
+        />
+      )}
     </>
   );
 }
+
+const REASON_PRESETS = [
+  'Pas de réponse aux relances',
+  'Qualité des fiches insuffisante',
+  'Absences répétées en sessions',
+  'Risque de décrochage',
+];
+
+function EscaladeForm({ student, onClose, onEscalated }) {
+  const [preset, setPreset] = useState(REASON_PRESETS[0]);
+  const [customReason, setCustomReason] = useState('');
+  const [details, setDetails] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [existingAlerts, setExistingAlerts] = useState(null);
+
+  useEffect(() => {
+    api.getAlerts({ studentId: student.id })
+      .then((al) => setExistingAlerts(al))
+      .catch(() => setExistingAlerts([]));
+  }, [student.id]);
+
+  const isCustom = preset === 'custom';
+  const finalReason = (isCustom ? customReason : preset).trim();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!finalReason) {
+      setError('Indiquez la raison de l\'escalade.');
+      return;
+    }
+    const fullReason = details.trim() ? `${finalReason} — ${details.trim()}` : finalReason;
+    setSubmitting(true);
+    try {
+      await api.createAlert({ student_id: student.id, reason: fullReason });
+      onEscalated();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const existingCount = existingAlerts?.length ?? null;
+
+  return (
+    <div style={escOverlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={escModal}>
+        <div style={escHeader}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '1rem' }}>
+              🚨 Escalader en alerte ROUGE
+            </div>
+            <div style={{ fontSize: '0.82rem', opacity: 0.85 }}>
+              {student.last_name} {student.first_name} · N° {student.student_number}
+            </div>
+          </div>
+          <button onClick={onClose} style={escCloseBtn}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ padding: 20 }}>
+          {existingCount !== null && (
+            <div style={{
+              background: existingCount > 0 ? '#fff5f5' : '#f0fdf4',
+              border: `1px solid ${existingCount > 0 ? '#e74c3c' : '#27ae60'}`,
+              borderRadius: 6, padding: '8px 12px', marginBottom: 16,
+              fontSize: '0.84rem',
+            }}>
+              {existingCount > 0
+                ? `⚠️ ${existingCount} alerte${existingCount > 1 ? 's' : ''} déjà active${existingCount > 1 ? 's' : ''} sur cet étudiant.`
+                : '✅ Aucune alerte active actuellement.'}
+            </div>
+          )}
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontWeight: 600, display: 'block', marginBottom: 8 }}>Motif de l'escalade *</label>
+            {REASON_PRESETS.map((r) => (
+              <label key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="preset"
+                  value={r}
+                  checked={preset === r}
+                  onChange={(e) => setPreset(e.target.value)}
+                />
+                <span style={{ fontSize: '0.88rem' }}>{r}</span>
+              </label>
+            ))}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                name="preset"
+                value="custom"
+                checked={preset === 'custom'}
+                onChange={(e) => setPreset(e.target.value)}
+              />
+              <span style={{ fontSize: '0.88rem' }}>Autre motif (préciser)</span>
+            </label>
+            {isCustom && (
+              <input
+                type="text"
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder="ex: Conflit avec l'entreprise d'accueil"
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 4, border: '1px solid #e0e0e0', marginTop: 6, fontSize: '0.88rem', boxSizing: 'border-box' }}
+                autoFocus
+              />
+            )}
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              Détails complémentaires <span style={{ color: '#aaa', fontWeight: 400 }}>(optionnel)</span>
+            </label>
+            <textarea
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              placeholder="Contexte, dates clés, actions déjà tentées..."
+              rows={3}
+              style={{ width: '100%', padding: '8px 10px', borderRadius: 4, border: '1px solid #e0e0e0', resize: 'vertical', fontFamily: 'inherit', fontSize: '0.88rem', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {error && <div className="alert-banner danger" style={{ marginBottom: 12 }}>{error}</div>}
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={onClose}>
+              Annuler
+            </button>
+            <button type="submit" className="btn btn-danger" style={{ flex: 2, fontWeight: 600 }} disabled={submitting}>
+              {submitting ? 'Création...' : '🚨 Confirmer l\'escalade'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const escOverlay = {
+  position: 'fixed', inset: 0,
+  background: 'rgba(0,0,0,0.55)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  zIndex: 1100, padding: 16,
+};
+const escModal = {
+  background: 'white', borderRadius: 10,
+  width: '100%', maxWidth: 520,
+  maxHeight: '90vh',
+  boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+  overflow: 'hidden',
+  display: 'flex', flexDirection: 'column',
+};
+const escHeader = {
+  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  padding: '14px 18px',
+  background: 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)',
+  color: 'white',
+};
+const escCloseBtn = { background: 'none', border: 'none', color: 'white', fontSize: '1.2rem', cursor: 'pointer' };
