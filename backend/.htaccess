@@ -1,6 +1,7 @@
 RewriteEngine On
 
-# Proxy API vers le backend Node.js (port 3001 en staging)
+# Proxy health check et API vers le backend Node.js (port 3001 en staging)
+RewriteRule ^health$ http://127.0.0.1:3001/health [P,L,QSA]
 RewriteCond %{REQUEST_URI} ^/api/
 RewriteRule ^api/(.*)$ http://127.0.0.1:3001/api/$1 [P,L,QSA]
 

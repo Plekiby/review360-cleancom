@@ -24,7 +24,7 @@ jobs:
           npm run build
           cp ../backend/.htaccess dist/.htaccess
         env:
-          VITE_API_URL: https://staging.sc1juwa0721.universe.wf/api
+          VITE_API_URL: http://staging.sc1juwa0721.universe.wf/api
 
       - name: Deploy frontend via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -40,7 +40,7 @@ jobs:
       - name: Trigger backend deploy via webhook
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST https://staging.sc1juwa0721.universe.wf/deploy \
+            -X POST http://staging.sc1juwa0721.universe.wf/deploy \
             -H "x-deploy-secret: ${{ secrets.DEPLOY_SECRET }}" \
             --max-time 10 || echo "000")
           if [ "$STATUS" != "200" ]; then
@@ -52,7 +52,7 @@ jobs:
       - name: Smoke test staging
         run: |
           sleep 20
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://staging.sc1juwa0721.universe.wf/health || echo "000")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://staging.sc1juwa0721.universe.wf/health || echo "000")
           if [ "$STATUS" != "200" ]; then
             echo "❌ Staging health check failed (HTTP $STATUS)"
             exit 1
