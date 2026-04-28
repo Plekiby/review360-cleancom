@@ -1,0 +1,30 @@
+module.exports = {
+  apps: [
+    {
+      name: 'review360-staging',
+      script: 'src/server.js',
+      cwd: '/home/sc1juwa0721/apps/review360-backend-staging/backend',
+      env: { NODE_ENV: 'staging', PORT: 3001 },
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '300M',
+      log_file: '/home/sc1juwa0721/logs/backend-staging.log',
+      error_file: '/home/sc1juwa0721/logs/pm2-staging-error.log',
+      time: true,
+    },
+    {
+      name: 'review360-prod',
+      script: 'src/server.js',
+      cwd: '/home/sc1juwa0721/apps/review360-backend-prod/backend',
+      env: { NODE_ENV: 'production', PORT: 3002 },
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '300M',
+      log_file: '/home/sc1juwa0721/logs/backend-prod.log',
+      error_file: '/home/sc1juwa0721/logs/pm2-prod-error.log',
+      time: true,
+    },
+  ],
+};
