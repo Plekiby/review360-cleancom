@@ -22,6 +22,7 @@ jobs:
         run: |
           npm install
           npm run build
+          cp ../backend/.htaccess dist/.htaccess
         env:
           VITE_API_URL: https://staging.sc1juwa0721.universe.wf/api
 
@@ -34,19 +35,6 @@ jobs:
           port: 21
           local-dir: frontend/dist/
           server-dir: /staging.sc1juwa0721.universe.wf/
-          dangerous-clean-slate: false
-
-      - name: Upload .htaccess via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-        with:
-          server: ${{ secrets.O2SWITCH_FTP_HOST }}
-          username: ${{ secrets.O2SWITCH_FTP_USER }}
-          password: ${{ secrets.O2SWITCH_FTP_PASSWORD }}
-          port: 21
-          local-dir: backend/
-          server-dir: /staging.sc1juwa0721.universe.wf/
-          include: |
-            .htaccess
           dangerous-clean-slate: false
 
       - name: Trigger backend deploy via webhook
