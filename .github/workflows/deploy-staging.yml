@@ -38,7 +38,7 @@ jobs:
             cd backend
             npm ci --production
             NODE_ENV=staging node src/db/migrate.js
-            pm2 restart review360-staging || pm2 start ecosystem.config.js --only review360-staging
+            pm2 restart review360-staging || pm2 start ecosystem.config.cjs --only review360-staging
             echo "✅ Backend staging redémarré"
 
       - name: Clear old frontend files
