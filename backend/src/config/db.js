@@ -5,6 +5,8 @@ dotenv.config();
 
 const { Pool } = pg;
 
+const isProduction = ['staging', 'production'].includes(process.env.NODE_ENV);
+
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT) || 5432,
@@ -14,6 +16,7 @@ const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 
 pool.on('error', (err) => {
