@@ -9,13 +9,17 @@ dotenv.config();
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const { Pool } = pg;
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'review360_dev',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD,
-});
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
+    : {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 5432,
+        database: process.env.DB_NAME || 'review360_dev',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD,
+      }
+);
 
 const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
 
