@@ -3,12 +3,15 @@
 -- Système de Suivi BTS MCO Multi-tenant SaaS
 -- ===========================
 
--- EXTENSION UUID
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Fonction UUID sans extension (compatible PG 9.6 sur hébergement partagé)
+CREATE OR REPLACE FUNCTION gen_random_uuid()
+RETURNS uuid AS $$
+  SELECT (md5(random()::text || clock_timestamp()::text))::uuid;
+$$ LANGUAGE SQL;
 
 -- ========== SCHOOLS (Multi-tenant) ==========
 CREATE TABLE IF NOT EXISTS schools (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
   siret VARCHAR(14),
   contact_email VARCHAR(255),
@@ -20,7 +23,7 @@ CREATE TABLE IF NOT EXISTS schools (
 
 -- ========== USERS (Enseignants, Admins) ==========
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   email VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
@@ -38,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 -- ========== CLASSES ==========
 CREATE TABLE IF NOT EXISTS classes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   name VARCHAR(50) NOT NULL, -- MCO1A, MCO2B, etc.
   year SMALLINT CHECK (year IN (1, 2)), -- 1ère ou 2ème année (optionnel)
@@ -54,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes(teacher_id);
 
 -- ========== STUDENTS ==========
 CREATE TABLE IF NOT EXISTS students (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   student_number VARCHAR(20) NOT NULL,
@@ -71,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
 
 -- ========== ACTIVITY SHEETS (Fiches ADOC & DRCV) ==========
 CREATE TABLE IF NOT EXISTS activity_sheets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   sheet_type VARCHAR(10) NOT NULL CHECK (sheet_type IN ('ADOC', 'DRCV')), -- Type de fiche
   sheet_number SMALLINT NOT NULL, -- 1-5 pour ADOC, 1-4 pour DRCV
@@ -97,7 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_activity_sheets_status ON activity_sheets(status)
 
 -- ========== FOLLOW-UP SESSIONS (Sessions de suivi) ==========
 CREATE TABLE IF NOT EXISTS follow_up_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   activity_sheet_id UUID NOT NULL REFERENCES activity_sheets(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
@@ -126,7 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_activity ON follow_up_sessions(activity_
 
 -- ========== VALIDATIONS (Points de validation) ==========
 CREATE TABLE IF NOT EXISTS validations (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   session_id UUID NOT NULL REFERENCES follow_up_sessions(id) ON DELETE CASCADE,
   activity_sheet_id UUID NOT NULL REFERENCES activity_sheets(id) ON DELETE CASCADE,
   teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE SET NULL,
@@ -153,7 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_validations_teacher ON validations(teacher_id);
 
 -- ========== ALERTS (Système d'alertes) ==========
 CREATE TABLE IF NOT EXISTS alerts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   activity_sheet_id UUID REFERENCES activity_sheets(id) ON DELETE CASCADE,
 
@@ -173,7 +176,7 @@ CREATE INDEX IF NOT EXISTS idx_alerts_resolved ON alerts(is_resolved);
 
 -- ========== IMPORT LOGS (Historique des imports Excel) ==========
 CREATE TABLE IF NOT EXISTS import_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
 
@@ -191,7 +194,7 @@ CREATE INDEX IF NOT EXISTS idx_import_logs_created ON import_logs(created_at);
 
 -- ========== AUDIT LOG (Historique des actions) ==========
 CREATE TABLE IF NOT EXISTS audit_logs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
 
