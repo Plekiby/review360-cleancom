@@ -11,10 +11,10 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
 
-  if (res.status === 401) {
+  if (res.status === 401 && getToken()) {
     localStorage.removeItem('review360_token');
     localStorage.removeItem('review360_user');
-    window.location.href = '/login';
+    window.location.href = '/';
     return;
   }
 
