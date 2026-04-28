@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import { spawn } from 'child_process';
 
 import authRoutes from './routes/auth.js';
 import classesRoutes from './routes/classes.js';
@@ -27,6 +28,20 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Webhook de déploiement — appelé par GitHub Actions après chaque push sur develop
+app.post('/deploy', (req, res) => {
+  const secret = req.headers['x-deploy-secret'];
+  if (!process.env.DEPLOY_SECRET || secret !== process.env.DEPLOY_SECRET) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  res.json({ ok: true, message: 'Deploy started' });
+  const child = spawn('/bin/bash', ['/home/sc1juwa0721/deploy-staging.sh'], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
 });
 
 app.use('/api/auth', authRoutes);

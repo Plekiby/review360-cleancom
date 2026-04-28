@@ -25,55 +25,45 @@ jobs:
         env:
           VITE_API_URL: https://staging.sc1juwa0721.universe.wf/api
 
-      - name: Deploy backend via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy frontend via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          host: ${{ secrets.O2SWITCH_HOST }}
-          username: ${{ secrets.O2SWITCH_USER }}
-          key: ${{ secrets.O2SWITCH_SSH_KEY }}
-          script: |
-            set -e
-            cd ~/apps/review360-backend-staging
-            git pull origin develop
-            cd backend
-            npm ci --production
-            NODE_ENV=staging node src/db/migrate.js
-            pm2 restart review360-staging || pm2 start ecosystem.config.cjs --only review360-staging
-            echo "✅ Backend staging redémarré"
+          server: ${{ secrets.O2SWITCH_FTP_HOST }}
+          username: ${{ secrets.O2SWITCH_FTP_USER }}
+          password: ${{ secrets.O2SWITCH_FTP_PASSWORD }}
+          port: 21
+          local-dir: frontend/dist/
+          server-dir: /staging.sc1juwa0721.universe.wf/
+          dangerous-clean-slate: false
 
-      - name: Clear old frontend files
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Upload .htaccess via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          host: ${{ secrets.O2SWITCH_HOST }}
-          username: ${{ secrets.O2SWITCH_USER }}
-          key: ${{ secrets.O2SWITCH_SSH_KEY }}
-          script: |
-            rm -rf ~/staging.sc1juwa0721.universe.wf/*
-            mkdir -p ~/staging.sc1juwa0721.universe.wf
+          server: ${{ secrets.O2SWITCH_FTP_HOST }}
+          username: ${{ secrets.O2SWITCH_FTP_USER }}
+          password: ${{ secrets.O2SWITCH_FTP_PASSWORD }}
+          port: 21
+          local-dir: backend/
+          server-dir: /staging.sc1juwa0721.universe.wf/
+          include: |
+            .htaccess
+          dangerous-clean-slate: false
 
-      - name: Copy frontend build
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.O2SWITCH_HOST }}
-          username: ${{ secrets.O2SWITCH_USER }}
-          key: ${{ secrets.O2SWITCH_SSH_KEY }}
-          source: 'frontend/dist/*'
-          target: '~/staging.sc1juwa0721.universe.wf/'
-          strip_components: 2
-
-      - name: Copy .htaccess
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.O2SWITCH_HOST }}
-          username: ${{ secrets.O2SWITCH_USER }}
-          key: ${{ secrets.O2SWITCH_SSH_KEY }}
-          source: 'backend/.htaccess'
-          target: '~/staging.sc1juwa0721.universe.wf/'
-          strip_components: 1
+      - name: Trigger backend deploy via webhook
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST https://staging.sc1juwa0721.universe.wf/deploy \
+            -H "x-deploy-secret: ${{ secrets.DEPLOY_SECRET }}" \
+            --max-time 10 || echo "000")
+          if [ "$STATUS" != "200" ]; then
+            echo "⚠️ Backend webhook failed (HTTP $STATUS) — redémarrage manuel requis"
+          else
+            echo "✅ Backend deploy déclenché"
+          fi
 
       - name: Smoke test staging
         run: |
-          sleep 15
+          sleep 20
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://staging.sc1juwa0721.universe.wf/health || echo "000")
           if [ "$STATUS" != "200" ]; then
             echo "❌ Staging health check failed (HTTP $STATUS)"
